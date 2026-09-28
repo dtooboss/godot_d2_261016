@@ -1,0 +1,52 @@
+extends Control
+class_name AFK_PlayerBottomBar
+
+@onready var hp_bar: AFK_Bar = %HPBar
+@onready var mp_bar: AFK_Bar = %MPBar
+@onready var player_info_label: Label = %PlayerInfoLabel
+@onready var attack_progress_bar: ProgressBar = %AttackProgressBar
+@onready var skill_name_label: Label = %SkillNameLabel
+@onready var exp_bar: ProgressBar = %ExpBar
+@onready var exp_label: Label = %ExpLabel
+
+var current_exp: int = 0
+var max_exp: int = 160
+var attack_timer: float = 0.0
+var attack_duration: float = 1.5
+
+func _ready() -> void:
+	update_player_info("Lv.1 哈哈哈")
+	update_hp(38, 80)
+	update_mp(70, 70)
+	update_exp(0, 160)
+
+func _process(delta: float) -> void:
+	attack_timer += delta
+	if attack_timer >= attack_duration:
+		attack_timer = 0.0
+	attack_progress_bar.value = (attack_timer / attack_duration)
+
+func update_player_info(text: String) -> void:
+	if player_info_label:
+		player_info_label.text = text
+
+func update_hp(cur: int, maximum: int) -> void:
+	if not hp_bar:
+		hp_bar = get_node_or_null("%HPBar")
+	if hp_bar:
+		hp_bar.set_stat(cur, maximum)
+
+func update_mp(cur: int, maximum: int) -> void:
+	if not mp_bar:
+		mp_bar = get_node_or_null("%MPBar")
+	if mp_bar:
+		mp_bar.set_stat(cur, maximum)
+
+func update_exp(cur: int, maximum: int) -> void:
+	current_exp = cur
+	max_exp = max(1, maximum)
+	var pct = int((float(cur) / float(max_exp)) * 100.0)
+	if exp_bar:
+		exp_bar.value = pct
+	if exp_label:
+		exp_label.text = "%d/%d(%d%%)" % [cur, max_exp, pct]

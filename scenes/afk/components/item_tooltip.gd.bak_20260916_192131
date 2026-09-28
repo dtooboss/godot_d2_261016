@@ -1,0 +1,250 @@
+extends PanelContainer
+class_name AFK_ItemTooltip
+
+@onready var icon_frame: PanelContainer = %IconFrame
+@onready var item_icon: TextureRect = %ItemIcon
+@onready var content_label: RichTextLabel = %ContentLabel
+
+var current_item_cmd: String = ""
+var tooltip_sockets: SocketsOverlay = null
+var sockets_bar: HBoxContainer = null
+
+func _ready() -> void:
+	hide()
+	z_index = 100
+	if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
+		var net = get_node_or_null("/root/NetworkClient")
+		if net:
+			net.json_frame_received.connect(_on_network_json)
+
+func _ensure_tooltip_sockets() -> void:
+	if tooltip_sockets == null and item_icon:
+		tooltip_sockets = SocketsOverlay.new()
+		item_icon.add_child(tooltip_sockets)
+
+func _ensure_sockets_bar() -> void:
+	if sockets_bar == null:
+		var vbox = get_node_or_null("Margin/VBox")
+		if vbox:
+			sockets_bar = HBoxContainer.new()
+			sockets_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+			sockets_bar.add_theme_constant_override("separation", 6)
+			sockets_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vbox.add_child(sockets_bar)
+
+func _update_sockets_bar(sock_count: int, inlays: Array) -> void:
+	_ensure_sockets_bar()
+	if not sockets_bar:
+		return
+		
+	for child in sockets_bar.get_children():
+		child.queue_free()
+		
+	if sock_count <= 0:
+		sockets_bar.hide()
+		return
+		
+	sockets_bar.show()
+	var socket_tex: Texture2D = null
+	if ResourceLoader.exists("res://assets/images/gemsocket.lowend.png"):
+		socket_tex = load("res://assets/images/gemsocket.lowend.png")
+		
+	for i in range(sock_count):
+		var slot_box = Control.new()
+		slot_box.custom_minimum_size = Vector2(24, 24)
+		slot_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+		var inlay_path = ""
+		if i < inlays.size():
+			inlay_path = str(inlays[i]).strip_edges()
+		var has_inlay = not inlay_path.is_empty()
+		
+		# 1. 凹槽底图
+		if socket_tex:
+			var sock_rect = TextureRect.new()
+			sock_rect.texture = socket_tex
+			sock_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			sock_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			sock_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+			sock_rect.modulate = Color(1, 1, 1, 0.85 if has_inlay else 0.45)
+			sock_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			slot_box.add_child(sock_rect)
+			
+		# 2. 镶嵌物贴图 (宝石 / 符文)
+		if has_inlay:
+			var in_tex = AnsiHelper.load_item_texture(inlay_path)
+			if in_tex:
+				var in_rect = TextureRect.new()
+				in_rect.texture = in_tex
+				in_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				in_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				var in_size = 20.0
+				in_rect.custom_minimum_size = Vector2(in_size, in_size)
+				in_rect.size = Vector2(in_size, in_size)
+				in_rect.position = Vector2((24.0 - in_size) * 0.5, (24.0 - in_size) * 0.5)
+				in_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				slot_box.add_child(in_rect)
+				
+		sockets_bar.add_child(slot_box)
+
+func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
+	if not content_label:
+		return
+	
+	# 确保 Tooltip 永远处于同级节点的最顶层
+	move_to_front()
+		
+	current_item_cmd = str(data.get("cmd", ""))
+	var file_id = str(data.get("file_id", ""))
+	if current_item_cmd.is_empty() and not file_id.is_empty():
+		current_item_cmd = "look " + file_id
+	
+	# 1. 顶部装备大图原画展示
+	var icon_tex: Texture2D = data.get("icon_texture", null)
+	var icon_path: String = str(data.get("icon", ""))
+	if not icon_tex and not icon_path.is_empty():
+		icon_tex = AnsiHelper.load_item_texture(icon_path)
+		
+	if icon_tex:
+		item_icon.texture = icon_tex
+		icon_frame.show()
+	else:
+		icon_frame.hide()
+		
+	# 2. 富文本属性内容格式化
+	var raw_name = data.get("name", "未命名装备")
+	var desc = str(data.get("desc", ""))
+	if desc.is_empty() and data.has("item_info") and data["item_info"] is Dictionary:
+		desc = str(data["item_info"].get("desc", ""))
+	var color_hex = data.get("color", "#a59263")
+	
+	# 如果 desc 中带有内嵌大图标签，尝试提取
+	var img_info = AnsiHelper.extract_img_info(desc)
+	if not img_info.path.is_empty():
+		var large_tex = AnsiHelper.load_item_texture(img_info.path)
+		if large_tex:
+			item_icon.texture = large_tex
+			icon_frame.show()
+			
+	# 3. 解析装备凹槽与镶嵌物 (支持原生字典字段与 ?sock= URL 双轨解析)
+	var sock_count = AnsiHelper.to_safe_int(data.get("sockets"), 0)
+	var inlays = data.get("inlays", [])
+	if not (inlays is Array):
+		inlays = []
+	if sock_count <= 0 and "?" in icon_path:
+		var img_info_icon = AnsiHelper.extract_img_info("[img:" + icon_path + "]")
+		sock_count = AnsiHelper.to_safe_int(img_info_icon.get("sock"), 0)
+		var in_arr = img_info_icon.get("inlays", [])
+		if in_arr is Array or in_arr is PackedStringArray:
+			inlays = Array(in_arr)
+	if sock_count <= 0 and "?" in desc:
+		var img_info_desc = AnsiHelper.extract_img_info(desc)
+		sock_count = AnsiHelper.to_safe_int(img_info_desc.get("sock"), 0)
+		var in_arr_desc = img_info_desc.get("inlays", [])
+		if in_arr_desc is Array or in_arr_desc is PackedStringArray:
+			inlays = Array(in_arr_desc)
+			
+	_ensure_tooltip_sockets()
+	if tooltip_sockets:
+		tooltip_sockets.set_sockets(sock_count, inlays)
+	_update_sockets_bar(sock_count, inlays)
+	
+	var text_body = ""
+	if desc.begins_with("<center>") or desc.begins_with("[center]"):
+		text_body = AnsiHelper.to_bbcode(desc)
+	else:
+		var clean_name = AnsiHelper.to_plain_text(raw_name)
+		var clean_desc = AnsiHelper.to_bbcode(desc)
+		var item_type = data.get("type", "")
+		var amount = AnsiHelper.to_safe_int(data.get("amount"), 1)
+		
+		text_body = "[center]"
+		if not clean_desc.contains(clean_name):
+			text_body += "[color=%s][b]%s[/b][/color]\n" % [color_hex, clean_name]
+			if not item_type.is_empty():
+				text_body += "[color=#ffffff]%s[/color]\n" % item_type
+			if amount > 1:
+				text_body += "[color=#ffdd66]数量: %s[/color]\n" % _format_number(amount)
+			if not clean_desc.is_empty():
+				text_body += "\n" + clean_desc
+		else:
+			text_body += clean_desc
+		text_body += "[/center]"
+		
+	if sock_count > 0 and not text_body.contains("凹槽"):
+		if text_body.ends_with("[/center]"):
+			text_body = text_body.substr(0, text_body.length() - 9) + "\n[color=#808080]凹槽 (%d)[/color][/center]" % sock_count
+		else:
+			text_body += "\n[color=#808080]凹槽 (%d)[/color]" % sock_count
+		
+	content_label.text = text_body
+	content_label.custom_minimum_size = Vector2(210, 0)
+	
+	# 关键：强制重算真实高度，彻底消除多余黑色拉伸条！
+	custom_minimum_size = Vector2(230, 0)
+	size = Vector2(230, 0)
+	reset_size()
+	
+	# 紧凑智能定位：贴靠在格子左侧，垂直方向贴合鼠标且不超出上下屏幕
+	var target_x = max(10.0, global_slot_pos.x - 245.0)
+	var max_y = max(10.0, 720.0 - size.y - 15.0)
+	var target_y = clamp(global_slot_pos.y - 20.0, 15.0, max_y)
+	position = Vector2(target_x, target_y)
+	show()
+	
+	# 3. 向 LPC 请求更详细的装备词缀卡片 (如果有 cmd)
+	if not current_item_cmd.is_empty():
+		if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
+			var net = get_node_or_null("/root/NetworkClient")
+			if net and net.is_connected:
+				net.send_raw(current_item_cmd)
+
+func _on_network_json(type: String, data: Variant) -> void:
+	if not visible:
+		return
+	# 收到 look 返回的 panel 卡片数据，原地刷新更详尽的暗黑2词缀
+	if (type == "panel" or type == "actions") and data is Dictionary:
+		var desc = str(data.get("desc", ""))
+		if desc.is_empty():
+			return
+			
+		var img_info = AnsiHelper.extract_img_info(desc)
+		if not img_info.path.is_empty():
+			var large_tex = AnsiHelper.load_item_texture(img_info.path)
+			if large_tex:
+				item_icon.texture = large_tex
+				icon_frame.show()
+				
+		var net_sock = AnsiHelper.to_safe_int(img_info.get("sock"), 0)
+		var net_inlays = img_info.get("inlays", [])
+		var in_arr = net_inlays if (net_inlays is Array or net_inlays is PackedStringArray) else []
+		if net_sock > 0:
+			_ensure_tooltip_sockets()
+			if tooltip_sockets:
+				tooltip_sockets.set_sockets(net_sock, Array(in_arr))
+		_update_sockets_bar(net_sock, Array(in_arr))
+				
+		content_label.text = AnsiHelper.to_bbcode(desc)
+		content_label.custom_minimum_size = Vector2(210, 0)
+		custom_minimum_size = Vector2(230, 0)
+		size = Vector2(230, 0)
+		reset_size()
+
+func hide_tooltip() -> void:
+	hide()
+	current_item_cmd = ""
+	if tooltip_sockets:
+		tooltip_sockets.set_sockets(0, [])
+	if sockets_bar:
+		sockets_bar.hide()
+
+func _format_number(n: int) -> String:
+	var s = str(n)
+	var out = ""
+	var count = 0
+	for i in range(s.length() - 1, -1, -1):
+		out = s[i] + out
+		count += 1
+		if count % 3 == 0 and i > 0:
+			out = "," + out
+	return out

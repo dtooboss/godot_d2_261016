@@ -1,0 +1,290 @@
+extends Control
+
+## 暗黑破坏神2 通用主城安全区控制器 (TownHubController)
+## 全面支持 Act 1 ~ Act 5 主城安全区自适应 (后端 LPC 数据驱动)
+## 集成 AnsiHelper、天使/恶魔红蓝双球 HUD 与 10 部位装备纸娃娃背包
+
+# 顶部玩家与大本营信息
+@onready var lbl_room_title: RichTextLabel = $TopBar/HBox/RoomTitleLabel
+@onready var lbl_char_name: Label = $TopBar/HBox/CharInfoBox/CharNameLabel
+@onready var lbl_char_class: Label = $TopBar/HBox/CharInfoBox/CharClassLabel
+@onready var lbl_gold: Label = $TopBar/HBox/ResourceBox/GoldLabel
+@onready var avatar_icon: TextureRect = $TopBar/HBox/AvatarRect
+
+# 中央 NPC 与设施动态网格
+@onready var hub_title: Label = $CenterHub/VBox/HubTitle
+@onready var npc_container: GridContainer = $CenterHub/VBox/NpcScroll/NpcGrid
+
+# 底部 HUD 双球组件与背包视窗
+@onready var hud_bar = $HudBottomBar
+@onready var inv_panel = $InventoryPanel
+
+# 社交与组队弹窗/侧边栏
+@onready var player_list_box: VBoxContainer = $RightSidebar/VBox/Scroll/PlayerList
+@onready var chat_log: RichTextLabel = $ChatPanel/VBox/ChatLog
+@onready var chat_input: LineEdit = $ChatPanel/VBox/HBox/ChatInput
+@onready var toast_label: Label = $ToastLabel
+@onready var bg_rect: ColorRect = $Background
+
+# 五大幕主城主题色与出征默认配置 (第一性原理：由 LPC 下发标题动态自适应)
+const ACT_THEMES = {
+	"act1": { "name": "罗格营地", "bg": Color(0.045, 0.04, 0.03), "exit_name": "鲜血荒地", "exit_cmd": "north" },
+	"act2": { "name": "鲁高因", "bg": Color(0.07, 0.055, 0.03), "exit_name": "碎石荒地", "exit_cmd": "north" },
+	"act3": { "name": "库拉斯特", "bg": Color(0.03, 0.05, 0.035), "exit_name": "蜘蛛森林", "exit_cmd": "north" },
+	"act4": { "name": "群魔堡垒", "bg": Color(0.06, 0.03, 0.03), "exit_name": "外侧草原", "exit_cmd": "north" },
+	"act5": { "name": "哈洛加斯", "bg": Color(0.035, 0.045, 0.06), "exit_name": "血腥丘陵", "exit_cmd": "north" }
+}
+
+var current_room_name: String = "安全大本营"
+var current_exit_cmd: String = "north"
+var current_exit_name: String = "野外战场"
+var current_hp: int = 100
+var max_hp: int = 100
+var current_mp: int = 50
+var max_mp: int = 50
+var gold_amount: int = 0
+
+func _ready() -> void:
+	_init_player_ui()
+	_connect_signals()
+	
+	# 向 LPC 请求刷新当前房间全量数据
+	NetworkClient.send_raw("look")
+	_show_toast("已安全进驻要塞大本营！按 B 键可随时呼出背包")
+
+func _init_player_ui() -> void:
+	var cdata = GameState.selected_character
+	if not cdata.is_empty():
+		var cname = str(cdata.get("name", "英雄"))
+		var cls = str(cdata.get("class", "sor"))
+		var cls_name = str(cdata.get("class_name", GameState.get_class_display_name(cls)))
+		var level = int(cdata.get("level", 1))
+		
+		lbl_char_name.text = cname
+		lbl_char_class.text = "Lv.%d %s" % [level, cls_name]
+		avatar_icon.texture = GameState.get_class_icon(cls)
+		
+		max_hp = int(cdata.get("life", 100))
+		current_hp = max_hp
+		max_mp = int(cdata.get("mana", 50))
+		current_mp = max_mp
+		_update_vitals()
+
+func _connect_signals() -> void:
+	# 底部 HUD 与背包系统信号连接
+	hud_bar.bag_pressed.connect(inv_panel.toggle_window)
+	hud_bar.party_pressed.connect(_on_party_btn_pressed)
+	hud_bar.leave_town_pressed.connect(_on_leave_town_pressed)
+	
+	chat_input.text_submitted.connect(_on_chat_submitted)
+	
+	NetworkClient.json_frame_received.connect(_on_json_frame_received)
+	NetworkClient.text_received.connect(_on_text_received)
+
+func _update_vitals() -> void:
+	# 驱动天使生命红球与恶魔魔力蓝球平滑升降
+	hud_bar.update_health(current_hp, max_hp)
+	hud_bar.update_mana(current_mp, max_mp)
+	lbl_gold.text = "🪙 金币: %d    " % gold_amount
+
+## 处理服务端 JSON 数据包 (精细化解构，屏蔽刷屏)
+func _on_json_frame_received(type: String, data: Variant) -> void:
+	# 1. 房间标题 (如 罗格营地 / 鲁高因 / 库拉斯特 / 群魔堡垒 / 哈洛加斯)
+	if type == "title":
+		var raw_title = ""
+		var alvl = 0
+		if data is Dictionary:
+			raw_title = str(data.get("name", ""))
+			alvl = int(data.get("d2_alvl", 0))
+		elif data is String:
+			raw_title = data
+		_update_town_act(raw_title, alvl)
+		
+	# 2. 房间对象/NPC/在线玩家列表
+	elif type == "objects":
+		if data is Array:
+			_render_town_objects(data)
+			
+	# 3. 房间出口列表 (如 north: 鲜血荒地)
+	elif type == "exits":
+		if data is Array:
+			_update_town_exits(data)
+			
+	# 4. 角色状态 (HP/MP/Gold)
+	elif type == "status" or type == "charhp":
+		if data is Dictionary:
+			if data.has("qi"): current_hp = int(data["qi"])
+			if data.has("max_qi"): max_hp = int(data["max_qi"])
+			if data.has("jing"): current_mp = int(data["jing"])
+			if data.has("max_jing"): max_mp = int(data["max_jing"])
+			if data.has("gold"): gold_amount = int(data["gold"])
+			_update_vitals()
+			
+	# 5. 交互面板
+	elif type == "panel" or type == "actions":
+		if data is Dictionary:
+			var desc = str(data.get("desc", ""))
+			if not desc.is_empty():
+				_append_chat("[color=#e2e8f0]" + desc.replace("\n", " ") + "[/color]")
+
+## 根据当前主城标题自适应 Act 与环境
+func _update_town_act(raw_title: String, alvl: int) -> void:
+	var plain_name = AnsiHelper.to_plain_text(raw_title)
+	var bbcode_name = AnsiHelper.to_bbcode(raw_title)
+	if plain_name.is_empty():
+		plain_name = "安全要塞"
+		bbcode_name = "安全要塞"
+		
+	current_room_name = plain_name
+	var alvl_text = " (Lv.%d)" % alvl if alvl > 0 else ""
+	
+	# 富文本居中渲染，彻底杜绝 raw json 字典乱码泄漏
+	lbl_room_title.text = "[center]【 %s%s [color=#4ade80](安全区)[/color] 】[/center]" % [bbcode_name, alvl_text]
+	_append_chat("[color=#22c55e]【场景】[/color] 当前安全要塞：%s%s" % [bbcode_name, alvl_text])
+	
+	# 自适应主题色与默认出征出口
+	for act_key in ACT_THEMES:
+		var act_info = ACT_THEMES[act_key]
+		if act_info.name in current_room_name:
+			bg_rect.color = act_info.bg
+			hub_title.text = "—— %s · 核心设施与全功能服务 ——" % act_info.name
+			current_exit_name = act_info.exit_name
+			current_exit_cmd = act_info.exit_cmd
+			hud_bar.update_leave_button("⚔️ 离开主城 · 进军%s" % current_exit_name)
+			break
+
+## 动态渲染主城所有 NPC 与在线玩家
+func _render_town_objects(objects_list: Array) -> void:
+	for c in npc_container.get_children():
+		c.queue_free()
+	for c in player_list_box.get_children():
+		c.queue_free()
+		
+	# 默认添加核心通用常驻设施：储物箱与传送小站
+	_add_facility_button("🗄️ 赫拉迪姆大储物箱", "个人仓与跨角色共享仓", "open stash")
+	_add_facility_button("🌟 石制传送小站 (WP)", "区域世界传送 / 野外副本", "waypoint")
+	
+	var has_other_player: bool = false
+	
+	for obj in objects_list:
+		if not obj is Dictionary: continue
+		var raw_name = str(obj.get("name", ""))
+		var clean_name = AnsiHelper.to_plain_text(raw_name)
+		var ocmd = str(obj.get("cmd", ""))
+		var rank = str(obj.get("rank", "normal"))
+		
+		if clean_name.is_empty():
+			continue
+		
+		# 判断是 NPC 还是 玩家
+		if "npc" in ocmd or rank != "player":
+			var subtitle = _get_npc_subtitle(clean_name)
+			_add_npc_button(clean_name, subtitle, ocmd)
+		else:
+			has_other_player = true
+			var p_btn = Button.new()
+			p_btn.text = clean_name
+			p_btn.custom_minimum_size = Vector2(0, 32)
+			p_btn.pressed.connect(func(): NetworkClient.send_raw(ocmd))
+			player_list_box.add_child(p_btn)
+			
+	if not has_other_player:
+		var empty_hint = Label.new()
+		empty_hint.text = "当前营地无其他在线英雄"
+		empty_hint.modulate = Color(0.6, 0.6, 0.6, 0.7)
+		empty_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		player_list_box.add_child(empty_hint)
+
+func _get_npc_subtitle(npc_name: String) -> String:
+	if "阿卡拉" in npc_name:
+		return "女教士 · 治愈与药剂"
+	elif "恰西" in npc_name:
+		return "铁匠 · 武器修理与锻造"
+	elif "基德" in npc_name:
+		return "商人 · 装备买卖与赌博"
+	elif "卡夏" in npc_name:
+		return "佣兵统领 · 罗格射手整编"
+	elif "瓦瑞夫" in npc_name:
+		return "商队领袖 · 启程前往鲁高因"
+	elif "凯恩" in npc_name:
+		return "智者 · 免费辨识魔法装备"
+	elif "卓格南" in npc_name:
+		return "法师 · 魔法卷轴与法杖"
+	elif "奥玛斯" in npc_name:
+		return "巫医 · 精神治愈与法术"
+	elif "马拉" in npc_name:
+		return "医师 · 极地补给与全满回血"
+	elif "拉素克" in npc_name:
+		return "野蛮人铁匠 · 打孔与重铸"
+	elif "夸尔凯克" in npc_name:
+		return "佣兵统领 · 野蛮人战士招募"
+	elif "安尼亚" in npc_name:
+		return "炼金术师 · 赌博与特殊交易"
+	else:
+		return "点击交谈 / 设施服务"
+
+func _add_npc_button(name_str: String, subtitle_str: String, cmd_str: String) -> void:
+	var btn = Button.new()
+	btn.text = "👤 %s\n(%s)" % [name_str, subtitle_str]
+	btn.custom_minimum_size = Vector2(235, 78)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(func(): 
+		_append_chat("[color=#f59e0b]【交互】[/color] 正在与 [color=#60a5fa]%s[/color] 交谈..." % name_str)
+		NetworkClient.send_raw(cmd_str)
+	)
+	npc_container.add_child(btn)
+
+func _add_facility_button(title_str: String, subtitle_str: String, cmd_str: String) -> void:
+	var btn = Button.new()
+	btn.text = "%s\n(%s)" % [title_str, subtitle_str]
+	btn.custom_minimum_size = Vector2(235, 78)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn.pressed.connect(func(): NetworkClient.send_raw(cmd_str))
+	npc_container.add_child(btn)
+
+## 动态更新出口 (第一性原理：由 LPC 下发出口名称与方向驱动)
+func _update_town_exits(exits_list: Array) -> void:
+	for ex in exits_list:
+		if ex is Dictionary:
+			var dir = str(ex.get("dir", ""))
+			var raw_ename = str(ex.get("name", ""))
+			var ename = AnsiHelper.to_plain_text(raw_ename)
+			var ecmd = str(ex.get("cmd", ""))
+			
+			if dir == "north" or "荒地" in ename or "丘陵" in ename or "草原" in ename or "森林" in ename or "外" in ename or "城" in ename:
+				current_exit_name = ename if not ename.is_empty() else "野外战场"
+				current_exit_cmd = ecmd if not ecmd.is_empty() else dir
+				hud_bar.update_leave_button("⚔️ 离开主城 · 进军%s" % current_exit_name)
+				break
+
+func _on_leave_town_pressed() -> void:
+	_append_chat("[color=#ef4444]【出征】[/color] 离开安全区，向 [color=#fbbf24]%s[/color] 出发！" % current_exit_name)
+	NetworkClient.send_raw(current_exit_cmd)
+
+func _on_party_btn_pressed() -> void:
+	_append_chat("[color=#38bdf8]【组队】[/color] 查询当前队伍信息...")
+	NetworkClient.send_raw("team")
+
+func _on_chat_submitted(text: String) -> void:
+	text = text.strip_edges()
+	if text.is_empty(): return
+	chat_input.clear()
+	NetworkClient.send_raw("chat " + text)
+
+func _on_text_received(text: String) -> void:
+	var bb = AnsiHelper.to_bbcode(text)
+	_append_chat(bb)
+
+func _append_chat(msg: String) -> void:
+	chat_log.append_text(msg + "\n")
+
+func _show_toast(msg: String) -> void:
+	toast_label.text = msg
+	toast_label.visible = true
+	var tween = create_tween()
+	tween.tween_property(toast_label, "modulate:a", 1.0, 0.2)
+	tween.tween_interval(2.5)
+	tween.tween_property(toast_label, "modulate:a", 0.0, 0.5)
+	tween.tween_callback(func(): toast_label.visible = false)

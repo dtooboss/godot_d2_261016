@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3 uid="uid://b7v1x3q9m5k2p"]
+
+[ext_resource type="Script" path="res://scripts/test_team_dismiss_and_menu.gd" id="1_test_script"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/party_hud_panel.tscn" id="2_party_hud"]
+
+[node name="TestTeamDismissAndMenu" type="Node2D"]
+script = ExtResource("1_test_script")
+
+[node name="Background" type="ColorRect" parent="."]
+custom_minimum_size = Vector2(1280, 720)
+offset_right = 1280.0
+offset_bottom = 720.0
+color = Color(0.045, 0.04, 0.032, 1)
+
+[node name="PartyHudPanel" parent="." instance=ExtResource("2_party_hud")]
+offset_left = 30.0
+offset_top = 30.0
+offset_right = 320.0
+offset_bottom = 270.0

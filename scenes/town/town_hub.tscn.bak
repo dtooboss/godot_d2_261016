@@ -1,0 +1,225 @@
+[gd_scene load_steps=4 format=3 uid="uid://b6p2x8m4n1y7t"]
+
+[ext_resource type="Script" path="res://scripts/ui/town_hub_controller.gd" id="1_hub_script"]
+[ext_resource type="PackedScene" path="res://scenes/hud/hud_bottom_bar.tscn" id="2_hud"]
+[ext_resource type="PackedScene" path="res://scenes/inventory/inventory_panel.tscn" id="3_inv"]
+
+[node name="TownHub" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_hub_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0470588, 0.0392157, 0.0313726, 1)
+
+[node name="Atmosphere" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.25)
+
+[node name="TopBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 60.0
+grow_horizontal = 2
+
+[node name="HBox" type="HBoxContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="AvatarRect" type="TextureRect" parent="TopBar/HBox"]
+custom_minimum_size = Vector2(50, 50)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CharInfoBox" type="VBoxContainer" parent="TopBar/HBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="CharNameLabel" type="Label" parent="TopBar/HBox/CharInfoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 16
+text = "英雄名字"
+
+[node name="CharClassLabel" type="Label" parent="TopBar/HBox/CharInfoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "Lv.99 亚马逊"
+
+[node name="RoomTitleLabel" type="RichTextLabel" parent="TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+bbcode_enabled = true
+fit_content = true
+scroll_active = false
+autowrap_mode = 0
+theme_override_font_sizes/normal_font_size = 20
+text = "[center]【 [color=#4ade80]罗格营地[/color] (安全区) 】[/center]"
+
+[node name="ResourceBox" type="HBoxContainer" parent="TopBar/HBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 2
+
+[node name="GoldLabel" type="Label" parent="TopBar/HBox/ResourceBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 15
+text = "🪙 金币: 0    "
+
+[node name="CenterHub" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -390.0
+offset_top = -280.0
+offset_right = 390.0
+offset_bottom = 120.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterHub"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="HubTitle" type="Label" parent="CenterHub/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.8, 0.5, 1)
+theme_override_font_sizes/font_size = 16
+text = "—— 罗格营地 · 核心设施与全功能服务 ——"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterHub/VBox"]
+layout_mode = 2
+
+[node name="NpcScroll" type="ScrollContainer" parent="CenterHub/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="NpcGrid" type="GridContainer" parent="CenterHub/VBox/NpcScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 14
+theme_override_constants/v_separation = 12
+columns = 3
+
+[node name="RightSidebar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -280.0
+offset_right = -16.0
+offset_bottom = 180.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="RightSidebar"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="RightSidebar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.75, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "👥 主城在线玩家"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="RightSidebar/VBox"]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="RightSidebar/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="PlayerList" type="VBoxContainer" parent="RightSidebar/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ChatPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 190.0
+offset_top = -300.0
+offset_right = 580.0
+offset_bottom = -150.0
+grow_vertical = 0
+
+[node name="VBox" type="VBoxContainer" parent="ChatPanel"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ChatLog" type="RichTextLabel" parent="ChatPanel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 2
+theme_override_font_sizes/normal_font_size = 13
+bbcode_enabled = true
+scroll_following = true
+selection_enabled = true
+
+[node name="HBox" type="HBoxContainer" parent="ChatPanel/VBox"]
+layout_mode = 2
+
+[node name="ChatInput" type="LineEdit" parent="ChatPanel/VBox/HBox"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+placeholder_text = "按回车发送公频聊天..."
+
+[node name="HudBottomBar" parent="." instance=ExtResource("2_hud")]
+layout_mode = 1
+
+[node name="InventoryPanel" parent="." instance=ExtResource("3_inv")]
+layout_mode = 1
+
+[node name="ToastLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -18.0
+offset_right = 200.0
+offset_bottom = 18.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+text = "通知信息"
+horizontal_alignment = 1

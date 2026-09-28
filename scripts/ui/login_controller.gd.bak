@@ -1,0 +1,132 @@
+extends Control
+
+## 暗黑破坏神2 登录界面控制器 (LoginController)
+## 管理账号输入、服务器选择、记住密码及网络握手反馈
+
+@onready var id_input: LineEdit = $Panel/VBox/InputContainer/IdInput
+@onready var pass_input: LineEdit = $Panel/VBox/InputContainer/PassInput
+@onready var remember_check: CheckBox = $Panel/VBox/RememberContainer/RememberCheck
+@onready var server_info_label: Label = $Panel/VBox/ServerContainer/ServerInfoLabel
+@onready var status_label: Label = $Panel/VBox/StatusLabel
+@onready var btn_login: Button = $Panel/VBox/ButtonContainer/BtnLogin
+@onready var btn_register: Button = $Panel/VBox/ButtonContainer/HBoxSub/BtnRegister
+@onready var btn_exit: Button = $Panel/VBox/ButtonContainer/HBoxSub/BtnExit
+
+const SAVE_PATH = "user://login_settings.json"
+var default_host: String = "127.0.0.1"
+var default_port: int = 7878
+
+func _ready() -> void:
+	_load_saved_settings()
+	_update_server_display()
+	
+	# 连接 NetworkClient 信号
+	NetworkClient.connected_to_server.connect(_on_connected)
+	NetworkClient.connection_failed.connect(_on_connection_failed)
+	NetworkClient.disconnected_from_server.connect(_on_disconnected)
+	NetworkClient.login_success.connect(_on_login_success)
+	NetworkClient.login_failed.connect(_on_login_failed)
+	
+	# 按钮点击绑定
+	btn_login.pressed.connect(_on_login_pressed)
+	btn_register.pressed.connect(_on_register_pressed)
+	btn_exit.pressed.connect(_on_exit_pressed)
+	
+	# 回车直接触发登录
+	id_input.text_submitted.connect(func(_text): pass_input.grab_focus())
+	pass_input.text_submitted.connect(func(_text): _on_login_pressed())
+	
+	id_input.grab_focus()
+
+func _update_server_display() -> void:
+	server_info_label.text = "战网服务器: %s:%d [在线/就绪]" % [default_host, default_port]
+
+func _on_login_pressed() -> void:
+	_execute_auth("login")
+
+func _on_register_pressed() -> void:
+	_execute_auth("register")
+
+func _execute_auth(action: String) -> void:
+	var user = id_input.text.strip_edges()
+	var pass_str = pass_input.text.strip_edges()
+	
+	if user.is_empty():
+		_set_status("请输入战网通行证账号", Color(1.0, 0.4, 0.4))
+		id_input.grab_focus()
+		return
+		
+	if pass_str.is_empty():
+		_set_status("请输入通行证密码", Color(1.0, 0.4, 0.4))
+		pass_input.grab_focus()
+		return
+		
+	_set_loading(true)
+	if action == "register":
+		_set_status("正在向庇护之地注册新通行证...", Color(0.8, 0.8, 0.9))
+	else:
+		_set_status("正在连接庇护之地服务器...", Color(0.8, 0.8, 0.9))
+		
+	_save_settings()
+	NetworkClient.connect_and_login(default_host, default_port, user, pass_str, action)
+
+func _on_connected() -> void:
+	_set_status("已连通要塞，正在协商版本与验证身份...", Color(0.9, 0.85, 0.6))
+
+func _on_connection_failed() -> void:
+	_set_loading(false)
+	_set_status("无法连接到战网服务器 (%s:%d)，请检查服务器是否开启" % [default_host, default_port], Color(1.0, 0.3, 0.3))
+
+func _on_disconnected() -> void:
+	_set_loading(false)
+	_set_status("与服务器的连接已中断", Color(1.0, 0.4, 0.4))
+
+func _on_login_success(characters: Array) -> void:
+	_set_status("认证成功！正在载入战网英雄大厅...", Color(0.4, 1.0, 0.5))
+	print("[Login] 成功获取角色列表: ", characters)
+	GameState.character_list = characters
+	GameState.current_account = id_input.text.strip_edges().to_lower()
+	
+	# 延时后平滑切换至角色选择大厅
+	await get_tree().create_timer(0.4).timeout
+	get_tree().change_scene_to_file("res://scenes/lobby/character_select_screen.tscn")
+
+func _on_login_failed(err_msg: String) -> void:
+	_set_loading(false)
+	_set_status("登录失败: " + err_msg, Color(1.0, 0.3, 0.3))
+
+func _set_loading(loading: bool) -> void:
+	btn_login.disabled = loading
+	btn_register.disabled = loading
+	id_input.editable = not loading
+	pass_input.editable = not loading
+
+func _set_status(msg: String, color: Color) -> void:
+	status_label.text = msg
+	status_label.modulate = color
+
+func _on_exit_pressed() -> void:
+	get_tree().quit()
+
+func _load_saved_settings() -> void:
+	if FileAccess.file_exists(SAVE_PATH):
+		var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
+		if file:
+			var json_str = file.get_as_text()
+			var json = JSON.new()
+			if json.parse(json_str) == OK and json.data is Dictionary:
+				var data = json.data
+				id_input.text = str(data.get("user", ""))
+				if data.get("remember", false):
+					remember_check.button_pressed = true
+					pass_input.text = str(data.get("pass", ""))
+
+func _save_settings() -> void:
+	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if file:
+		var data = {
+			"user": id_input.text.strip_edges(),
+			"remember": remember_check.button_pressed,
+			"pass": pass_input.text if remember_check.button_pressed else ""
+		}
+		file.store_string(JSON.stringify(data))

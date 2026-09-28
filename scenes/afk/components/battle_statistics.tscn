@@ -1,0 +1,162 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/battle_statistics.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/panel_background_light.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="3"]
+
+[node name="BattleStatistics" type="Control"]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 690.0
+offset_top = 490.0
+offset_right = 855.0
+offset_bottom = 647.0
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_styles/panel = ExtResource("2")
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 4
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 1
+
+[node name="TimeLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/TimeLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "挂机时间"
+
+[node name="ValTime" type="Label" parent="Panel/MarginContainer/VBoxContainer/TimeLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "00:00:00"
+
+[node name="DeathLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/DeathLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "死亡次数"
+
+[node name="ValDeath" type="Label" parent="Panel/MarginContainer/VBoxContainer/DeathLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0"
+
+[node name="DPSLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/DPSLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "每秒伤害"
+
+[node name="ValDPS" type="Label" parent="Panel/MarginContainer/VBoxContainer/DPSLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0.0"
+
+[node name="HealLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/HealLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "每秒治疗量"
+
+[node name="ValHeal" type="Label" parent="Panel/MarginContainer/VBoxContainer/HealLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0.0"
+
+[node name="TakeDmgLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/TakeDmgLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "每秒受伤害"
+
+[node name="ValTakeDmg" type="Label" parent="Panel/MarginContainer/VBoxContainer/TakeDmgLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0.0"
+
+[node name="KillLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/KillLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "每分击杀"
+
+[node name="ValKillRate" type="Label" parent="Panel/MarginContainer/VBoxContainer/KillLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0.00"
+
+[node name="ExpLine" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="Panel/MarginContainer/VBoxContainer/ExpLine"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "每分经验"
+
+[node name="ValExpRate" type="Label" parent="Panel/MarginContainer/VBoxContainer/ExpLine"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "0"
+
+[node name="BtnReset" type="Button" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(42, 18)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -46.0
+offset_top = -22.0
+offset_right = -4.0
+offset_bottom = -2.0
+grow_horizontal = 0
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 11
+text = "重置"

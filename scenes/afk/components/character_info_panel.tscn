@@ -1,0 +1,1239 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/character_info_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/border_panel.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="3"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="4"]
+[ext_resource type="Texture2D" path="res://assets/images/helmet_frame.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/images/armor_frame.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/images/pants_frame.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/images/gloves_frame.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/images/boots_frame.png" id="9"]
+[ext_resource type="Texture2D" path="res://assets/images/pet_frame.png" id="10"]
+[ext_resource type="Texture2D" path="res://assets/images/necklace_frame.png" id="11"]
+[ext_resource type="Texture2D" path="res://assets/images/ring_frame.png" id="12"]
+[ext_resource type="Texture2D" path="res://assets/images/wings_frame.png" id="13"]
+[ext_resource type="Texture2D" path="res://assets/images/main_hand_frame.png" id="14"]
+[ext_resource type="Texture2D" path="res://assets/images/off_hand_frame.png" id="15"]
+
+[ext_resource type="Script" path="res://scenes/afk/components/paperdoll_slot_button.gd" id="16"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_stat_row"]
+bg_color = Color(0.1, 0.1, 0.12, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.22, 0.18, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot_bg"]
+bg_color = Color(0.06, 0.06, 0.07, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.26, 0.2, 0.6)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="CharacterInfoPanel" type="Control"]
+custom_minimum_size = Vector2(460, 480)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 460.0
+offset_bottom = 480.0
+script = ExtResource("1")
+
+[node name="MainHBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 4
+
+[node name="LeftCard" type="PanelContainer" parent="MainHBox"]
+custom_minimum_size = Vector2(216, 480)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2")
+
+[node name="LeftMargin" type="MarginContainer" parent="MainHBox/LeftCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="LeftVBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LeftTitleBar" type="PanelContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="TitleLabel" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/LeftTitleBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "角色信息"
+horizontal_alignment = 1
+
+[node name="PaperdollSlots" type="Control" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
+custom_minimum_size = Vector2(200, 186)
+layout_mode = 2
+
+[node name="SlotPet" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 0
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 42.0
+offset_bottom = 42.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("10")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotNecklace" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 0
+offset_left = 54.0
+offset_top = 12.0
+offset_right = 78.0
+offset_bottom = 36.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("11")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotHelmet" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 38)
+layout_mode = 0
+offset_left = 86.0
+offset_top = 6.0
+offset_right = 124.0
+offset_bottom = 44.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("5")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotWings" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(50, 38)
+layout_mode = 0
+offset_left = 144.0
+offset_top = 6.0
+offset_right = 194.0
+offset_bottom = 44.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("13")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotMainHand" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 76)
+layout_mode = 0
+offset_left = 6.0
+offset_top = 48.0
+offset_right = 42.0
+offset_bottom = 124.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("14")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotArmor" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 54)
+layout_mode = 0
+offset_left = 86.0
+offset_top = 48.0
+offset_right = 124.0
+offset_bottom = 102.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("6")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotOffHand" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 76)
+layout_mode = 0
+offset_left = 156.0
+offset_top = 48.0
+offset_right = 194.0
+offset_bottom = 124.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("15")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotGloves" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 0
+offset_left = 6.0
+offset_top = 132.0
+offset_right = 42.0
+offset_bottom = 170.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("8")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotRing1" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 0
+offset_left = 54.0
+offset_top = 144.0
+offset_right = 76.0
+offset_bottom = 166.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("12")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotPants" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 56)
+layout_mode = 0
+offset_left = 86.0
+offset_top = 106.0
+offset_right = 124.0
+offset_bottom = 162.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("7")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotRing2" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 0
+offset_left = 130.0
+offset_top = 144.0
+offset_right = 152.0
+offset_bottom = 166.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("12")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="SlotBoots" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PaperdollSlots"]
+script = ExtResource("16")
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 38)
+layout_mode = 0
+offset_left = 158.0
+offset_top = 132.0
+offset_right = 194.0
+offset_bottom = 170.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_slot_bg")
+icon = ExtResource("9")
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="PointsHBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+
+[node name="PointsTitle" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PointsHBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "剩余点数"
+
+[node name="PointsLabel" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PointsHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 12
+text = "0"
+horizontal_alignment = 2
+
+[node name="AttributesBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="RowStr" type="PanelContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_stat_row")
+
+[node name="Margin" type="MarginContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 3
+
+[node name="HBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Name" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "力量"
+
+[node name="Desc" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 9
+text = "增加物理攻击力和暴击"
+
+[node name="ValStr" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "10"
+
+[node name="BtnAddStr" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowStr/Margin/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+"
+
+[node name="RowDex" type="PanelContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_stat_row")
+
+[node name="Margin" type="MarginContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 3
+
+[node name="HBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Name" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "敏捷"
+
+[node name="Desc" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 9
+text = "增加防御、攻速与暴击"
+
+[node name="ValDex" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "10"
+
+[node name="BtnAddDex" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowDex/Margin/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+"
+
+[node name="RowVit" type="PanelContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_stat_row")
+
+[node name="Margin" type="MarginContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 3
+
+[node name="HBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Name" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "体力"
+
+[node name="Desc" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 9
+text = "增加生命上限与伤害反弹"
+
+[node name="ValVit" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "20"
+
+[node name="BtnAddVit" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowVit/Margin/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+"
+
+[node name="RowInt" type="PanelContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_stat_row")
+
+[node name="Margin" type="MarginContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 3
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 3
+
+[node name="HBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin"]
+layout_mode = 2
+
+[node name="VBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Name" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "智力"
+
+[node name="Desc" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin/HBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 9
+text = "增加魔法攻击力与法力上限"
+
+[node name="ValInt" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "10"
+
+[node name="BtnAddInt" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/AttributesBox/RowInt/Margin/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(18, 18)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+"
+
+[node name="RightCard" type="PanelContainer" parent="MainHBox"]
+custom_minimum_size = Vector2(236, 480)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2")
+
+[node name="RightMargin" type="MarginContainer" parent="MainHBox/RightCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="RightVBox" type="VBoxContainer" parent="MainHBox/RightCard/RightMargin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RightTitleBar" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="TitleHBox" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/RightTitleBar"]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/RightTitleBar/TitleHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+text = "角色属性"
+horizontal_alignment = 1
+
+[node name="BtnClose" type="Button" parent="MainHBox/RightCard/RightMargin/RightVBox/RightTitleBar/TitleHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("4")
+theme_override_font_sizes/font_size = 11
+text = "X"
+
+[node name="Scroll" type="ScrollContainer" parent="MainHBox/RightCard/RightMargin/RightVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 2
+
+[node name="StatVBox" type="VBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="SecBase" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecBase"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "基础信息与资源"
+horizontal_alignment = 1
+
+[node name="H_Lvl" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Lvl"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "等级"
+
+[node name="LblLevel" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Lvl"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "1"
+horizontal_alignment = 2
+
+[node name="H_Exp" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Exp"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "经验值"
+
+[node name="LblExp" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Exp"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0 / 160"
+horizontal_alignment = 2
+
+[node name="H_Hp" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Hp"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "生命值"
+
+[node name="LblHp" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Hp"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "90 / 90"
+horizontal_alignment = 2
+
+[node name="H_Mp" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mp"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "法力值"
+
+[node name="LblMp" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mp"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "70 / 70"
+horizontal_alignment = 2
+
+[node name="SecAtk" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecAtk"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "综合攻防与命中"
+horizontal_alignment = 1
+
+[node name="H_Phy" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Phy"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "物理攻击"
+
+[node name="LblPhyDmg" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Phy"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "6 ~ 13"
+horizontal_alignment = 2
+
+[node name="H_PhyDps" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_PhyDps"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "每秒物理伤害"
+
+[node name="LblPhyDps" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_PhyDps"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "8.36"
+horizontal_alignment = 2
+
+[node name="H_Mag" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mag"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "魔法攻击"
+
+[node name="LblMagDmg" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mag"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "7 ~ 13"
+horizontal_alignment = 2
+
+[node name="H_MagDps" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_MagDps"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "每秒魔法伤害"
+
+[node name="LblMagDps" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_MagDps"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "8.80"
+horizontal_alignment = 2
+
+[node name="H_DmgEnh" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_DmgEnh"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "增强伤害"
+
+[node name="LblDmgEnhance" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_DmgEnh"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Ar" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "攻击准确率"
+
+[node name="LblAr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "50"
+horizontal_alignment = 2
+
+[node name="H_Hit" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Hit"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "命中率"
+
+[node name="LblHitRate" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Hit"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "80%"
+horizontal_alignment = 2
+
+[node name="H_Def" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Def"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "防御力"
+
+[node name="LblDefense" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Def"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0"
+horizontal_alignment = 2
+
+[node name="H_Block" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Block"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "盾牌格挡"
+
+[node name="LblBlock" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Block"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0% / 75%"
+horizontal_alignment = 2
+
+[node name="SecRes" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecRes"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "元素抗性与减免"
+horizontal_alignment = 1
+
+[node name="H_Fire" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fire"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "火焰抗性"
+
+[node name="LblResFire" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fire"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.45, 0.35, 1)
+theme_override_font_sizes/font_size = 11
+text = "0% / 75%"
+horizontal_alignment = 2
+
+[node name="H_Cold" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Cold"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "冰冷抗性"
+
+[node name="LblResCold" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Cold"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.45, 0.75, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "0% / 75%"
+horizontal_alignment = 2
+
+[node name="H_Light" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Light"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "闪电抗性"
+
+[node name="LblResLight" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Light"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.92, 0.35, 1)
+theme_override_font_sizes/font_size = 11
+text = "0% / 75%"
+horizontal_alignment = 2
+
+[node name="H_Pois" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Pois"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "毒素抗性"
+
+[node name="LblResPoison" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Pois"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.45, 0.95, 0.45, 1)
+theme_override_font_sizes/font_size = 11
+text = "0% / 75%"
+horizontal_alignment = 2
+
+[node name="H_DrPct" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_DrPct"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "物理免伤 (DR%)"
+
+[node name="LblDrPct" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_DrPct"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Dr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Dr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "物理伤害减免"
+
+[node name="LblDr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Dr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0"
+horizontal_alignment = 2
+
+[node name="H_Mdr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mdr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "魔法伤害减免"
+
+[node name="LblMdr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mdr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0"
+horizontal_alignment = 2
+
+[node name="H_Plr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Plr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "缩短中毒时间"
+
+[node name="LblPlr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Plr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="SecBreakpoints" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecBreakpoints"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "战斗档位与机动"
+horizontal_alignment = 1
+
+[node name="H_Spd" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Spd"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "攻击速度 (IAS)"
+
+[node name="LblAtkSpeed" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Spd"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Fcr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fcr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "快速施法 (FCR)"
+
+[node name="LblFcr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fcr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Fhr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fhr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "打击恢复 (FHR)"
+
+[node name="LblFhr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fhr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Fbr" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fbr"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "快速格挡 (FBR)"
+
+[node name="LblFbr" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Fbr"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Frw" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Frw"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "跑走速度 (FRW)"
+
+[node name="LblFrw" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Frw"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="SecCombatEffects" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecCombatEffects"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "打击特效与偷取"
+horizontal_alignment = 1
+
+[node name="H_Cb" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Cb"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "压碎打击 (CB)"
+
+[node name="LblCb" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Cb"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Ds" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ds"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "致命攻击 (DS)"
+
+[node name="LblDs" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ds"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Ow" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ow"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "撕裂伤口 (OW)"
+
+[node name="LblOw" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Crit" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Crit"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "暴击率"
+
+[node name="LblCrit" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Crit"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_CritDmg" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_CritDmg"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "暴击伤害"
+
+[node name="LblCritDmg" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_CritDmg"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "200%"
+horizontal_alignment = 2
+
+[node name="H_Ll" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ll"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "生命偷取 (LL)"
+
+[node name="LblLl" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Ml" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ml"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "法力偷取 (ML)"
+
+[node name="LblMl" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Ml"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Lak" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Lak"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "击杀恢复生命"
+
+[node name="LblLak" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Lak"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0"
+horizontal_alignment = 2
+
+[node name="H_Mak" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mak"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "击杀恢复法力"
+
+[node name="LblMak" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mak"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0"
+horizontal_alignment = 2
+
+[node name="H_Itd" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Itd"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "忽视目标防御"
+
+[node name="LblItd" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Itd"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "否"
+horizontal_alignment = 2
+
+[node name="SecUtility" type="PanelContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Label" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/SecUtility"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 10
+text = "技能与寻宝探索"
+horizontal_alignment = 1
+
+[node name="H_AllSkills" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_AllSkills"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "所有技能提升"
+
+[node name="LblAllSkills" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_AllSkills"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.3, 1, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+text = "+0"
+horizontal_alignment = 2
+
+[node name="H_Mf" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mf"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "更加机会寻宝 (MF)"
+
+[node name="LblMf" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Mf"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.88, 0.3, 1)
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Gf" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Gf"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "更多金币掉落 (GF)"
+
+[node name="LblGf" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Gf"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "0%"
+horizontal_alignment = 2
+
+[node name="H_Radius" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Radius"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "照亮范围"
+
+[node name="LblLightRadius" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Radius"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "+0"
+horizontal_alignment = 2
+
+[node name="H_NoFreeze" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+layout_mode = 2
+
+[node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_NoFreeze"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "无法冰冻"
+
+[node name="LblCannotBeFrozen" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_NoFreeze"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+text = "否"
+horizontal_alignment = 2
+

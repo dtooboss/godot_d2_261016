@@ -1,0 +1,180 @@
+[gd_scene load_steps=7 format=3 uid="uid://c7k2h6m5v1x8p"]
+
+[ext_resource type="Script" path="res://scripts/ui/hud_bottom_bar_controller.gd" id="1_controller"]
+[ext_resource type="Shader" path="res://shaders/globe_liquid.gdshader" id="2_shader"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/angel_globe_frame.png" id="3_angel"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/demon_globe_frame.png" id="4_demon"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_hp"]
+shader = ExtResource("2_shader")
+shader_parameter/fill_ratio = 1.0
+shader_parameter/liquid_color = Color(0.85, 0.08, 0.08, 1)
+shader_parameter/foam_color = Color(1, 0.45, 0.45, 1)
+shader_parameter/wave_speed = 3.0
+shader_parameter/wave_freq = 16.0
+shader_parameter/wave_amp = 0.018
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mp"]
+shader = ExtResource("2_shader")
+shader_parameter/fill_ratio = 1.0
+shader_parameter/liquid_color = Color(0.12, 0.38, 0.88, 1)
+shader_parameter/foam_color = Color(0.5, 0.75, 1, 1)
+shader_parameter/wave_speed = 3.0
+shader_parameter/wave_freq = 16.0
+shader_parameter/wave_amp = 0.018
+
+[node name="HudBottomBar" type="Control"]
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 3
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -140.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("1_controller")
+
+[node name="LeftGlobe" type="Control" parent="."]
+custom_minimum_size = Vector2(180, 140)
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -140.0
+offset_right = 180.0
+grow_vertical = 0
+mouse_filter = 1
+
+[node name="HpLiquid" type="ColorRect" parent="LeftGlobe"]
+material = SubResource("ShaderMaterial_hp")
+custom_minimum_size = Vector2(106, 106)
+layout_mode = 0
+offset_left = 64.0
+offset_top = 18.0
+offset_right = 170.0
+offset_bottom = 124.0
+mouse_filter = 2
+
+[node name="AngelFrame" type="TextureRect" parent="LeftGlobe"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("3_angel")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HpLabel" type="Label" parent="LeftGlobe"]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 60.0
+offset_right = 170.0
+offset_bottom = 84.0
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_constants/shadow_outline_size = 2
+theme_override_font_sizes/font_size = 14
+text = "100 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RightGlobe" type="Control" parent="."]
+custom_minimum_size = Vector2(180, 140)
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -180.0
+offset_top = -140.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 1
+
+[node name="MpLiquid" type="ColorRect" parent="RightGlobe"]
+material = SubResource("ShaderMaterial_mp")
+custom_minimum_size = Vector2(106, 106)
+layout_mode = 0
+offset_left = 10.0
+offset_top = 18.0
+offset_right = 116.0
+offset_bottom = 124.0
+mouse_filter = 2
+
+[node name="DemonFrame" type="TextureRect" parent="RightGlobe"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("4_demon")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MpLabel" type="Label" parent="RightGlobe"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 60.0
+offset_right = 116.0
+offset_bottom = 84.0
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 1
+theme_override_constants/shadow_offset_y = 1
+theme_override_constants/shadow_outline_size = 2
+theme_override_font_sizes/font_size = 14
+text = "50 / 50"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CenterPanel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(580, 56)
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -290.0
+offset_top = -66.0
+offset_right = 290.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HBox" type="HBoxContainer" parent="CenterPanel"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="BtnLeave" type="Button" parent="CenterPanel/HBox"]
+custom_minimum_size = Vector2(250, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 15
+text = "⚔️ 离开主城 · 进军野外"
+
+[node name="BtnParty" type="Button" parent="CenterPanel/HBox"]
+custom_minimum_size = Vector2(120, 42)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "👥 队伍 (P)"
+
+[node name="BtnBag" type="Button" parent="CenterPanel/HBox"]
+custom_minimum_size = Vector2(130, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.8, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "🎒 背包 (B)"

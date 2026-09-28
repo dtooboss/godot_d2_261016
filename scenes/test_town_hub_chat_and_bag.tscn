@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://kbd87jfa6mc3"]
+
+[ext_resource type="Script" path="res://scripts/test_town_hub_chat_and_bag.gd" id="1_test"]
+
+[node name="TestTownHubChatAndBag" type="Node"]
+script = ExtResource("1_test")

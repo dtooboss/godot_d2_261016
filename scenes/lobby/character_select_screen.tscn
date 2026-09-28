@@ -1,0 +1,238 @@
+[gd_scene load_steps=2 format=3 uid="uid://d3m7y2x9q1k4p"]
+
+[ext_resource type="Script" path="res://scripts/ui/character_select_controller.gd" id="1_controller"]
+
+[node name="CharacterSelectScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_controller")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0431373, 0.0352941, 0.027451, 1)
+
+[node name="Vignette" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.25)
+
+[node name="TopBar" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -400.0
+offset_top = 20.0
+offset_right = 400.0
+offset_bottom = 75.0
+grow_horizontal = 2
+
+[node name="Title" type="Label" parent="TopBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.88, 0.76, 0.48, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_font_sizes/font_size = 26
+text = "庇 护 之 地 · 战 网 英 雄 大 厅"
+horizontal_alignment = 1
+
+[node name="MainLayout" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -580.0
+offset_top = -260.0
+offset_right = 580.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 30
+
+[node name="LeftPanel" type="VBoxContainer" parent="MainLayout"]
+custom_minimum_size = Vector2(500, 0)
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="DetailBox" type="PanelContainer" parent="MainLayout/LeftPanel"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VBox" type="VBoxContainer" parent="MainLayout/LeftPanel/DetailBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="HeaderBox" type="HBoxContainer" parent="MainLayout/LeftPanel/DetailBox/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="BigAvatar" type="TextureRect" parent="MainLayout/LeftPanel/DetailBox/VBox/HeaderBox"]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="VBox" type="VBoxContainer" parent="MainLayout/LeftPanel/DetailBox/VBox/HeaderBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 1
+
+[node name="DetailName" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/HeaderBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 24
+text = "英雄全名"
+
+[node name="DetailClassLevel" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/HeaderBox/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 15
+text = "Lv.99 亚马逊"
+
+[node name="HSeparator" type="HSeparator" parent="MainLayout/LeftPanel/DetailBox/VBox"]
+layout_mode = 2
+
+[node name="StatsGrid" type="GridContainer" parent="MainLayout/LeftPanel/DetailBox/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="LblLife" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.35, 0.35, 1)
+text = "生命值 (Life):"
+
+[node name="ValLife" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "478"
+
+[node name="LblMana" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.55, 0.9, 1)
+text = "法力值 (Mana):"
+
+[node name="ValMana" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "279"
+
+[node name="LblStr" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.7, 0.5, 1)
+text = "力量 (Str):"
+
+[node name="ValStr" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "35"
+
+[node name="LblDex" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.7, 0.5, 1)
+text = "敏捷 (Dex):"
+
+[node name="ValDex" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "80"
+
+[node name="LblVit" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.7, 0.5, 1)
+text = "体力 (Vit):"
+
+[node name="ValVit" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "30"
+
+[node name="LblInt" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.7, 0.5, 1)
+text = "精力 (Int):"
+
+[node name="ValInt" type="Label" parent="MainLayout/LeftPanel/DetailBox/VBox/StatsGrid"]
+layout_mode = 2
+text = "30"
+
+[node name="DiffContainer" type="PanelContainer" parent="MainLayout/LeftPanel"]
+layout_mode = 2
+
+[node name="HBox" type="HBoxContainer" parent="MainLayout/LeftPanel/DiffContainer"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 24
+
+[node name="DiffNormal" type="CheckBox" parent="MainLayout/LeftPanel/DiffContainer/HBox"]
+layout_mode = 2
+button_pressed = true
+text = "普通难度"
+
+[node name="DiffNightmare" type="CheckBox" parent="MainLayout/LeftPanel/DiffContainer/HBox"]
+layout_mode = 2
+text = "噩梦难度"
+
+[node name="DiffHell" type="CheckBox" parent="MainLayout/LeftPanel/DiffContainer/HBox"]
+layout_mode = 2
+text = "地狱难度"
+
+[node name="RightPanel" type="PanelContainer" parent="MainLayout"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Scroll" type="ScrollContainer" parent="MainLayout/RightPanel"]
+layout_mode = 2
+
+[node name="CardList" type="VBoxContainer" parent="MainLayout/RightPanel/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BottomBar" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -350.0
+offset_top = -80.0
+offset_right = 350.0
+offset_bottom = -15.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 6
+
+[node name="HBox" type="HBoxContainer" parent="BottomBar"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="BtnEnterGame" type="Button" parent="BottomBar/HBox"]
+custom_minimum_size = Vector2(280, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 17
+text = "进入庇护之地 (开始游戏)"
+
+[node name="BtnBack" type="Button" parent="BottomBar/HBox"]
+custom_minimum_size = Vector2(140, 42)
+layout_mode = 2
+text = "返回登录"
+
+[node name="StatusLabel" type="Label" parent="BottomBar"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "请选择你要出征的英雄"
+horizontal_alignment = 1

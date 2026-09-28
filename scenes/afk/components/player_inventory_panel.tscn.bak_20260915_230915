@@ -1,0 +1,224 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/player_inventory_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/style_dark_panel.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="3"]
+[ext_resource type="Texture2D" path="res://assets/images/coin.png" id="4"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/accept.tres" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/little_pocket_panel.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/add_inventory_confirm_panel.tscn" id="7"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_help"]
+bg_color = Color(0.18, 0.5, 0.2, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+border_blend = true
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_help_hover"]
+bg_color = Color(0.24, 0.65, 0.26, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+border_blend = true
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_multiselect"]
+bg_color = Color(0.12, 0.14, 0.18, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.35, 0.45, 0.8)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="PlayerInventoryPanel" type="Control"]
+custom_minimum_size = Vector2(294, 524)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 294.0
+offset_bottom = 524.0
+grow_horizontal = 1
+grow_vertical = 1
+script = ExtResource("1")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+theme_override_styles/panel = ExtResource("2")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 1
+grow_vertical = 1
+theme_override_constants/separation = 2
+
+[node name="TitleBar" type="PanelContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="HBox" type="HBoxContainer" parent="Panel/VBox/TitleBar"]
+layout_mode = 2
+
+[node name="BtnHelp" type="Button" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(22, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_help")
+theme_override_styles/hover = SubResource("StyleBoxFlat_btn_help_hover")
+text = "?"
+
+[node name="BtnPocket" type="Button" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(58, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = ExtResource("5")
+text = "小口袋"
+
+[node name="BtnMultiSelect" type="Button" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(46, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_multiselect")
+text = "多选"
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox/TitleBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "背包"
+horizontal_alignment = 2
+
+[node name="Spacer" type="Control" parent="Panel/VBox/TitleBar/HBox"]
+custom_minimum_size = Vector2(6, 0)
+layout_mode = 2
+
+[node name="GridMargin" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 0
+theme_override_constants/margin_bottom = 4
+
+[node name="MainContentHBox" type="HBoxContainer" parent="Panel/VBox/GridMargin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PageScrollContainer" type="ScrollContainer" parent="Panel/VBox/GridMargin/MainContentHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(26, 0)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+vertical_scroll_mode = 1
+
+[node name="InvButtonContainer" type="VBoxContainer" parent="Panel/VBox/GridMargin/MainContentHBox/PageScrollContainer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(22, 0)
+size_flags_horizontal = 3
+layout_mode = 2
+theme_override_constants/separation = 3
+
+[node name="Center" type="CenterContainer" parent="Panel/VBox/GridMargin/MainContentHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="GridContainer" type="GridContainer" parent="Panel/VBox/GridMargin/MainContentHBox/Center"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 2
+theme_override_constants/v_separation = 2
+columns = 7
+
+[node name="FooterBar" type="MarginContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_constants/margin_left = 0
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 4
+theme_override_constants/margin_bottom = 2
+
+[node name="HBox" type="HBoxContainer" parent="Panel/VBox/FooterBar"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BtnSort" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(46, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_styles/normal = ExtResource("5")
+text = "整理"
+
+[node name="BagDropdown" type="OptionButton" parent="Panel/VBox/FooterBar/HBox"]
+custom_minimum_size = Vector2(86, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+selected = 0
+item_count = 1
+popup/item_0/text = "全部背包"
+popup/item_0/id = 0
+
+[node name="GoldContainer" type="HBoxContainer" parent="Panel/VBox/FooterBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+alignment = 2
+
+[node name="GoldIcon" type="TextureRect" parent="Panel/VBox/FooterBar/HBox/GoldContainer"]
+custom_minimum_size = Vector2(16, 16)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("4")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="GoldLabel" type="Label" parent="Panel/VBox/FooterBar/HBox/GoldContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_font_sizes/font_size = 11
+text = "100,000G"
+
+[node name="Spacer" type="Control" parent="Panel/VBox/FooterBar/HBox/GoldContainer"]
+custom_minimum_size = Vector2(4, 0)
+layout_mode = 2
+
+[node name="LittlePocketPanel" parent="." instance=ExtResource("6")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+offset_left = -176.0
+offset_top = 0.0
+offset_right = -4.0
+offset_bottom = 480.0
+
+[node name="AddInventoryConfirmPanel" parent="." instance=ExtResource("7")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1

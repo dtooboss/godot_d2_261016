@@ -1,0 +1,283 @@
+extends Control
+class_name AFK_PickupSettingPanel
+
+signal settings_saved(config: Dictionary)
+
+@onready var tab_container: TabContainer = %TabContainer
+@onready var btn_close: Button = %BtnClose
+@onready var btn_save: Button = %BtnSave
+
+# 其他拾取 Tab 内的复选框
+@onready var chk_material: CheckBox = %ChkMaterial
+@onready var chk_key: CheckBox = %ChkKey
+@onready var chk_jewel: CheckBox = %ChkJewel
+@onready var chk_skill: CheckBox = %ChkSkill
+@onready var chk_confirm_unique: CheckBox = %ChkConfirmUnique
+@onready var chk_keep_sockets: CheckBox = %ChkKeepSockets
+
+# 预设按钮
+@onready var btn_preset_safe: Button = %BtnPresetSafe
+@onready var btn_preset_farm: Button = %BtnPresetFarm
+@onready var btn_preset_speed: Button = %BtnPresetSpeed
+
+# 装备拾取 Tab 内的折叠行容器
+@onready var rows_container: VBoxContainer = %RowsContainer
+
+var current_config: Dictionary = {}
+var rarity_spinboxes: Dictionary = {}
+
+func _ready() -> void:
+	hide()
+	if btn_close:
+		btn_close.pressed.connect(hide_panel)
+	if btn_save:
+		btn_save.pressed.connect(_on_save_pressed)
+		
+	if btn_preset_safe:
+		btn_preset_safe.pressed.connect(func(): _apply_preset("safe"))
+	if btn_preset_farm:
+		btn_preset_farm.pressed.connect(func(): _apply_preset("farm"))
+	if btn_preset_speed:
+		btn_preset_speed.pressed.connect(func(): _apply_preset("speed"))
+		
+	_init_d2_equipment_rows()
+
+func _init_d2_equipment_rows() -> void:
+	# 暗黑2正统 6 大品质/分类定义
+	var d2_rarities = [
+		{
+			"id": "normal",
+			"name": "普通",
+			"color": Color(0.82, 0.82, 0.82), # 纯白
+			"sub_types": [
+				{"name": "武器", "key": "white_weapon"},
+				{"name": "衣服/防具", "key": "white_armor"},
+				{"name": "盾牌", "key": "white_shield"},
+				{"name": "头盔", "key": "white_head"}
+			]
+		},
+		{
+			"id": "superior",
+			"name": "超强 (无形/底材)",
+			"color": Color(0.6, 0.8, 1.0), # 淡蓝银灰
+			"sub_types": [
+				{"name": "超强属性 (+ED/耐久)", "key": "superior_prop"},
+				{"name": "无形 (高攻防/佣兵神器)", "key": "ethereal_prop"},
+				{"name": "天然带孔底材", "key": "sockets_prop"}
+			]
+		},
+		{
+			"id": "magic",
+			"name": "魔法",
+			"color": Color(0.28, 0.35, 0.95), # 暗黑蓝
+			"sub_types": [
+				{"name": "武器", "key": "magic_weapon"},
+				{"name": "防具", "key": "magic_armor"},
+				{"name": "手套/鞋子", "key": "magic_boots_gloves"},
+				{"name": "项链/戒指", "key": "magic_jewelry"}
+			]
+		},
+		{
+			"id": "rare",
+			"name": "稀有",
+			"color": Color(1.0, 1.0, 0.39), # 亮金
+			"sub_types": [
+				{"name": "武器", "key": "rare_weapon"},
+				{"name": "大件防具", "key": "rare_armor"},
+				{"name": "手套/鞋子", "key": "rare_boots_gloves"},
+				{"name": "项链/头环", "key": "rare_jewelry"}
+			]
+		},
+		{
+			"id": "set",
+			"name": "套装",
+			"color": Color(0.0, 0.8, 0.0), # 暗黑绿
+			"sub_types": [
+				{"name": "套装武器", "key": "set_weapon"},
+				{"name": "套装防具", "key": "set_armor"}
+			]
+		},
+		{
+			"id": "unique",
+			"name": "暗金",
+			"color": Color(0.72, 0.61, 0.37), # 暗金色
+			"sub_types": [
+				{"name": "暗金武器", "key": "unique_weapon"},
+				{"name": "暗金防具", "key": "unique_armor"},
+				{"name": "暗金饰品 (戒指/项链)", "key": "unique_jewelry"}
+			]
+		}
+	]
+	
+	for child in rows_container.get_children():
+		child.queue_free()
+	rarity_spinboxes.clear()
+		
+	for r in d2_rarities:
+		var row = _create_d2_rarity_row(r)
+		rows_container.add_child(row)
+
+func _create_d2_rarity_row(info: Dictionary) -> Control:
+	var row_vbox = VBoxContainer.new()
+	row_vbox.set_meta("rarity_info", info)
+	
+	# 主栏：折叠手柄 + 名称 + 孔数>=微调输入
+	var bar_hbox = HBoxContainer.new()
+	bar_hbox.custom_minimum_size = Vector2(0, 30)
+	
+	var btn_toggle = Button.new()
+	btn_toggle.text = "▼"
+	btn_toggle.custom_minimum_size = Vector2(24, 24)
+	btn_toggle.flat = true
+	bar_hbox.add_child(btn_toggle)
+	
+	var lbl_name = Label.new()
+	lbl_name.text = info["name"]
+	lbl_name.add_theme_color_override("font_color", info["color"])
+	lbl_name.add_theme_font_size_override("font_size", 13)
+	bar_hbox.add_child(lbl_name)
+	
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar_hbox.add_child(spacer)
+	
+	# 暗黑2地道门槛：孔数 >= [ 0 ~ 6 ]
+	var lbl_sock = Label.new()
+	lbl_sock.text = "孔数≥"
+	lbl_sock.add_theme_font_size_override("font_size", 11)
+	lbl_sock.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	bar_hbox.add_child(lbl_sock)
+	
+	var spin = SpinBox.new()
+	spin.min_value = 0
+	spin.max_value = 6 # 暗黑2装备最高 6 孔
+	spin.step = 1
+	spin.value = 0
+	spin.custom_minimum_size = Vector2(65, 24)
+	bar_hbox.add_child(spin)
+	rarity_spinboxes[info["id"]] = spin
+	
+	row_vbox.add_child(bar_hbox)
+	
+	# 展开子分类区域
+	var sub_panel = PanelContainer.new()
+	var sub_style = StyleBoxFlat.new()
+	sub_style.bg_color = Color(0.06, 0.06, 0.07, 0.85)
+	sub_style.border_width_left = 1
+	sub_style.border_color = Color(0.25, 0.25, 0.28, 0.5)
+	sub_panel.add_theme_stylebox_override("panel", sub_style)
+	sub_panel.visible = false
+	
+	var sub_margin = MarginContainer.new()
+	sub_margin.add_theme_constant_override("margin_left", 28)
+	sub_margin.add_theme_constant_override("margin_top", 4)
+	sub_margin.add_theme_constant_override("margin_bottom", 6)
+	
+	var sub_grid = HFlowContainer.new()
+	sub_grid.add_theme_constant_override("h_separation", 16)
+	sub_grid.add_theme_constant_override("v_separation", 4)
+	
+	for sub in info.get("sub_types", []):
+		var chk = CheckBox.new()
+		chk.text = sub["name"]
+		chk.name = sub["key"]
+		sub_grid.add_child(chk)
+		
+	sub_margin.add_child(sub_grid)
+	sub_panel.add_child(sub_margin)
+	row_vbox.add_child(sub_panel)
+	
+	# 绑定手柄折叠展开
+	btn_toggle.pressed.connect(func():
+		sub_panel.visible = !sub_panel.visible
+		btn_toggle.text = "▲" if sub_panel.visible else "▼"
+	)
+	
+	return row_vbox
+
+func open_with_config(cfg: Dictionary) -> void:
+	current_config = cfg.duplicate()
+	_apply_config_to_ui(current_config)
+	show()
+
+func toggle() -> void:
+	if visible:
+		hide_panel()
+	else:
+		show_panel()
+
+func show_panel() -> void:
+	_send_lpc_cmd("gfenjie get")
+	show()
+
+func hide_panel() -> void:
+	hide()
+
+func _apply_config_to_ui(cfg: Dictionary) -> void:
+	if chk_material: chk_material.button_pressed = bool(cfg.get("material", true))
+	if chk_key: chk_key.button_pressed = bool(cfg.get("key", false))
+	if chk_jewel: chk_jewel.button_pressed = bool(cfg.get("jewel", false))
+	if chk_skill: chk_skill.button_pressed = bool(cfg.get("skill", false))
+	if chk_confirm_unique: chk_confirm_unique.button_pressed = bool(cfg.get("confirm_unique", true))
+	if chk_keep_sockets: chk_keep_sockets.button_pressed = bool(cfg.get("keep_sockets", true))
+	
+	# 恢复孔数设置
+	var sock_dict = cfg.get("min_sockets", {})
+	if sock_dict is Dictionary:
+		for r_id in rarity_spinboxes:
+			if sock_dict.has(r_id):
+				rarity_spinboxes[r_id].value = int(sock_dict[r_id])
+				
+	# 遍历装备行复选框
+	for row in rows_container.get_children():
+		for chk in _find_all_checkboxes(row):
+			if cfg.has(chk.name):
+				chk.button_pressed = bool(cfg[chk.name])
+
+func _find_all_checkboxes(node: Node) -> Array[CheckBox]:
+	var res: Array[CheckBox] = []
+	if node is CheckBox:
+		res.append(node)
+	for child in node.get_children():
+		res.append_array(_find_all_checkboxes(child))
+	return res
+
+func _on_save_pressed() -> void:
+	var new_cfg = current_config.duplicate()
+	if chk_material: new_cfg["material"] = int(chk_material.button_pressed)
+	if chk_key: new_cfg["key"] = int(chk_key.button_pressed)
+	if chk_jewel: new_cfg["jewel"] = int(chk_jewel.button_pressed)
+	if chk_skill: new_cfg["skill"] = int(chk_skill.button_pressed)
+	if chk_confirm_unique: new_cfg["confirm_unique"] = int(chk_confirm_unique.button_pressed)
+	if chk_keep_sockets: new_cfg["keep_sockets"] = int(chk_keep_sockets.button_pressed)
+	
+	# 保存孔数
+	var sock_dict = {}
+	for r_id in rarity_spinboxes:
+		sock_dict[r_id] = int(rarity_spinboxes[r_id].value)
+	new_cfg["min_sockets"] = sock_dict
+	
+	# 保存各细分选项
+	for row in rows_container.get_children():
+		for chk in _find_all_checkboxes(row):
+			new_cfg[chk.name] = int(chk.button_pressed)
+			
+	current_config = new_cfg
+	var json_str = JSON.stringify(new_cfg)
+	_send_lpc_cmd("gfenjie save %s" % json_str)
+	settings_saved.emit(new_cfg)
+	hide_panel()
+
+func _apply_preset(p_name: String) -> void:
+	_send_lpc_cmd("gfenjie preset %s" % p_name)
+
+func _send_lpc_cmd(cmd: String) -> void:
+	if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
+		var net = get_node_or_null("/root/NetworkClient")
+		if net and net.is_connected:
+			net.send_raw(cmd)
+
+func _input(event: InputEvent) -> void:
+	if visible and event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		hide_panel()

@@ -1,0 +1,301 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/afk_main_hud.gd" id="1"]
+[ext_resource type="Texture2D" path="res://mods/vanilla/assets/worlds/1/1.png" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="3"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/panel_background_light.tres" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/monster_display.tscn" id="5"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/battle_statistics.tscn" id="6"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/player_bottom_bar.tscn" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/player_inventory_panel.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/control_matrix_panel.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/item_tooltip.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/afk/world_map/world_map.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/character_info_panel.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/pickup_setting_panel.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/salvage_unique_confirm_dialog.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/skill_panel.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/collapsible_chat_panel.tscn" id="16"]
+[ext_resource type="PackedScene" path="res://scenes/common/team_invite_dialog.tscn" id="17_team_dialog"]
+[ext_resource type="PackedScene" path="res://scenes/afk/components/party_hud_panel.tscn" id="18_party_hud"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_boss_bg"]
+bg_color = Color(0.35, 0, 0, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_boss_fill"]
+bg_color = Color(0.8, 0.7, 0.2, 1)
+
+[node name="AFK_MainHUD" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="MainHBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 0
+
+[node name="LeftViewport" type="Control" parent="MainHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+
+[node name="Background" type="TextureRect" parent="MainHBox/LeftViewport"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="MonsterDisplay" parent="MainHBox/LeftViewport" instance=ExtResource("5")]
+unique_name_in_owner = true
+layout_mode = 1
+offset_top = -20.0
+offset_bottom = -20.0
+
+[node name="TopLeftToolbar" type="HBoxContainer" parent="MainHBox/LeftViewport"]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 10.0
+offset_right = 310.0
+offset_bottom = 32.0
+theme_override_constants/separation = 4
+
+[node name="BtnReturnTown" type="Button" parent="MainHBox/LeftViewport/TopLeftToolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(74, 22)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 11
+text = "🏰 返回营地"
+
+[node name="BtnReturnMap" type="Button" parent="MainHBox/LeftViewport/TopLeftToolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(74, 22)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 11
+text = "返回大地图"
+
+[node name="BtnLootCheck" type="Button" parent="MainHBox/LeftViewport/TopLeftToolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(62, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "掉落查询"
+
+[node name="CurrentMapPanel" type="PanelContainer" parent="MainHBox/LeftViewport/TopLeftToolbar"]
+custom_minimum_size = Vector2(60, 22)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("4")
+
+[node name="Margin" type="MarginContainer" parent="MainHBox/LeftViewport/TopLeftToolbar/CurrentMapPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_right = 6
+
+[node name="CurrentMapLabel" type="Label" parent="MainHBox/LeftViewport/TopLeftToolbar/CurrentMapPanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "烈风平原"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BossProgressUI" type="VBoxContainer" parent="MainHBox/LeftViewport"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -110.0
+offset_top = 8.0
+offset_right = 110.0
+offset_bottom = 38.0
+grow_horizontal = 2
+theme_override_constants/separation = 2
+
+[node name="BossProgressLabel" type="Label" parent="MainHBox/LeftViewport/BossProgressUI"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.2, 0.2, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 12
+text = "BOSS进度: (0/300) 0%"
+horizontal_alignment = 1
+
+[node name="BossProgressBar" type="ProgressBar" parent="MainHBox/LeftViewport/BossProgressUI"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 8)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_boss_bg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_boss_fill")
+value = 0.0
+show_percentage = false
+
+[node name="BattleStatistics" parent="MainHBox/LeftViewport" instance=ExtResource("6")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -170.0
+offset_top = -170.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="PlayerBottomBar" parent="MainHBox/LeftViewport" instance=ExtResource("7")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -374.0
+offset_top = -98.0
+offset_right = 374.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="CollapsibleChatPanel" parent="MainHBox/LeftViewport" instance=ExtResource("16")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -209.0
+offset_right = 292.0
+offset_bottom = -185.0
+grow_vertical = 0
+
+[node name="RightSidebar" type="Control" parent="MainHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(294, 0)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerInventoryPanel" parent="MainHBox/RightSidebar" instance=ExtResource("8")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_right = 0.0
+grow_horizontal = 1
+grow_vertical = 1
+
+[node name="ControlMatrixPanel" parent="MainHBox/RightSidebar" instance=ExtResource("9")]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = -128.0
+offset_right = 0.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="WorldMap" parent="." instance=ExtResource("11")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="BtnToggleSidebar" type="Button" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(16, 54)
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -318.0
+offset_top = -27.0
+offset_right = -302.0
+offset_bottom = 27.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_font_sizes/font_size = 11
+text = "▶"
+
+[node name="CharacterInfoPanel" parent="." instance=ExtResource("12")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -240.0
+offset_right = 230.0
+offset_bottom = 240.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PickupSettingPanel" parent="." instance=ExtResource("13")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="SalvageUniqueConfirmDialog" parent="." instance=ExtResource("14")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="ItemTooltip" parent="." instance=ExtResource("10")]
+unique_name_in_owner = true
+z_index = 100
+visible = false
+layout_mode = 0
+offset_left = 630.0
+offset_top = 100.0
+offset_right = 840.0
+offset_bottom = 220.0
+
+[node name="SkillPanel" parent="." instance=ExtResource("15")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -390.0
+offset_top = -260.0
+offset_right = 390.0
+offset_bottom = 260.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TeamInviteDialog" parent="." instance=ExtResource("17_team_dialog")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="PartyHudPanel" parent="." instance=ExtResource("18_party_hud")]
+unique_name_in_owner = true
+layout_mode = 1
+

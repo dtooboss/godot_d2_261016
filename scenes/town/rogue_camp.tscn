@@ -1,0 +1,304 @@
+[gd_scene load_steps=2 format=3 uid="uid://bd7820n1ft3gx"]
+
+[ext_resource type="Script" path="res://scripts/ui/rogue_camp_controller.gd" id="1_camp_script"]
+
+[node name="RogueCamp" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_camp_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0470588, 0.0392157, 0.0313726, 1)
+
+[node name="CampAtmosphere" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.12, 0.08, 0.04, 0.3)
+
+[node name="TopBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 68)
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 68.0
+grow_horizontal = 2
+
+[node name="HBox" type="HBoxContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="AvatarRect" type="TextureRect" parent="TopBar/HBox"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CharInfoBox" type="VBoxContainer" parent="TopBar/HBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="CharNameLabel" type="Label" parent="TopBar/HBox/CharInfoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 17
+text = "英雄名字"
+
+[node name="CharClassLabel" type="Label" parent="TopBar/HBox/CharInfoBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "Lv.99 亚马逊"
+
+[node name="RoomTitleLabel" type="Label" parent="TopBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.85, 0.75, 0.45, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 0.8)
+theme_override_font_sizes/font_size = 22
+text = "【 罗格营地 (Act 1 安全区) 】"
+horizontal_alignment = 1
+
+[node name="ResourceBox" type="HBoxContainer" parent="TopBar/HBox"]
+layout_mode = 2
+theme_override_constants/separation = 18
+alignment = 2
+
+[node name="HpLabel" type="Label" parent="TopBar/HBox/ResourceBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 14
+text = "❤ 生命: 478 / 478"
+
+[node name="MpLabel" type="Label" parent="TopBar/HBox/ResourceBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.35, 0.65, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+text = "✦ 法力: 279 / 279"
+
+[node name="GoldLabel" type="Label" parent="TopBar/HBox/ResourceBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 14
+text = "🪙 金币: 0"
+
+[node name="CenterHub" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -380.0
+offset_top = -240.0
+offset_right = 380.0
+offset_bottom = 140.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="CenterHub"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HubTitle" type="Label" parent="CenterHub/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.88, 0.78, 0.5, 1)
+theme_override_font_sizes/font_size = 18
+text = "—— 罗格姐妹会大本营 · 核心设施与服务 ——"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="CenterHub/VBox"]
+layout_mode = 2
+
+[node name="NpcGrid" type="GridContainer" parent="CenterHub"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/h_separation = 18
+theme_override_constants/v_separation = 16
+columns = 3
+
+[node name="BtnAkara" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🧪 阿卡拉 · 修道院
+(一键满血魔 / 药水卷轴 / 洗点)"
+
+[node name="BtnCharsi" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🔨 铁匠恰西 · 铁砧
+(一键全修理 / 装备买卖 / 注入)"
+
+[node name="BtnGheed" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🎰 基德 · 赌博集市
+(金币盲盒赌博 / 抽暗金)"
+
+[node name="BtnKashya" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🏹 卡夏 · 佣兵兵营
+(雇佣与复活罗格弓箭手)"
+
+[node name="BtnStash" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🗄️ 赫拉迪姆大储物箱
+(个人仓与跨角色共享仓)"
+
+[node name="BtnWaypoint" type="Button" parent="CenterHub/NpcGrid"]
+custom_minimum_size = Vector2(230, 90)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 14
+text = "🌟 石制传送小站 (WP)
+(区域世界传送 / 野外副本)"
+
+[node name="RightSidebar" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -230.0
+offset_top = -240.0
+offset_right = -16.0
+offset_bottom = 260.0
+grow_horizontal = 0
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="RightSidebar"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="RightSidebar/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.7, 0.5, 1)
+theme_override_font_sizes/font_size = 14
+text = "👥 营地在线玩家"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="RightSidebar/VBox"]
+layout_mode = 2
+
+[node name="Scroll" type="ScrollContainer" parent="RightSidebar/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="PlayerList" type="VBoxContainer" parent="RightSidebar/VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ChatPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -230.0
+offset_right = 500.0
+offset_bottom = -76.0
+grow_vertical = 0
+
+[node name="ChatLog" type="RichTextLabel" parent="ChatPanel"]
+layout_mode = 2
+focus_mode = 2
+theme_override_font_sizes/normal_font_size = 12
+bbcode_enabled = true
+scroll_following = true
+selection_enabled = true
+
+[node name="HBox" type="HBoxContainer" parent="ChatPanel"]
+layout_mode = 2
+size_flags_vertical = 8
+
+[node name="ChatInput" type="LineEdit" parent="ChatPanel/HBox"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 12
+placeholder_text = "按回车发送公频聊天..."
+
+[node name="BottomBar" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -64.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="HBox" type="HBoxContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="BtnGoBloodMoor" type="Button" parent="BottomBar/HBox"]
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 16
+text = "⚔️ 离开营地 · 进军鲜血荒地"
+
+[node name="BtnParty" type="Button" parent="BottomBar/HBox"]
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+text = "👥 组队大厅"
+
+[node name="BtnBag" type="Button" parent="BottomBar/HBox"]
+custom_minimum_size = Vector2(140, 44)
+layout_mode = 2
+text = "🎒 装备背包"
+
+[node name="ToastLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -18.0
+offset_right = 200.0
+offset_bottom = 18.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+text = "通知信息"
+horizontal_alignment = 1

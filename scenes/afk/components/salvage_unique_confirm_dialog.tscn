@@ -1,0 +1,149 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/salvage_unique_confirm_dialog.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dark_card"]
+bg_color = Color(0.08, 0.08, 0.09, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.5, 0.38, 0.18, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.8)
+shadow_size = 8
+
+[node name="SalvageUniqueConfirmDialog" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(340, 190)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -170.0
+offset_top = -95.0
+offset_right = 170.0
+offset_bottom = 95.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_dark_card")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBar" type="PanelContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="HBox" type="HBoxContainer" parent="Panel/VBox/TitleBar"]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="Panel/VBox/TitleBar/HBox"]
+custom_minimum_size = Vector2(8, 0)
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+text = "⚠️ 暗金装备分解确认"
+
+[node name="BtnClose" type="Button" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.3, 0.3, 1)
+theme_override_font_sizes/font_size = 12
+text = "X"
+flat = true
+
+[node name="ContentMargin" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+
+[node name="ContentVBox" type="VBoxContainer" parent="Panel/VBox/ContentMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ItemHBox" type="HBoxContainer" parent="Panel/VBox/ContentMargin/ContentVBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ItemIcon" type="TextureRect" parent="Panel/VBox/ContentMargin/ContentVBox/ItemHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(36, 36)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ItemNameLabel" type="Label" parent="Panel/VBox/ContentMargin/ContentVBox/ItemHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.8, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "暗金装备"
+vertical_alignment = 1
+
+[node name="WarnDescLabel" type="Label" parent="Panel/VBox/ContentMargin/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 0.9)
+theme_override_font_sizes/font_size = 11
+text = "您正在尝试分解稀有暗金装备！此操作不可逆，将拆解获得大量金币与暗金碎片，是否确认分解？"
+autowrap_mode = 3
+
+[node name="ButtonMargin" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 12
+
+[node name="BtnHBox" type="HBoxContainer" parent="Panel/VBox/ButtonMargin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 2
+
+[node name="BtnCancel" type="Button" parent="Panel/VBox/ButtonMargin/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(76, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "取消"
+
+[node name="BtnConfirm" type="Button" parent="Panel/VBox/ButtonMargin/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(86, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "确认分解"

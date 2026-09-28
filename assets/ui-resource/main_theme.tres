@@ -1,0 +1,128 @@
+[gd_resource type="Theme" format=3 uid="uid://bqoqqf3s5fxej"]
+
+[ext_resource type="StyleBox" uid="uid://bn5fyw3av5fva" path="res://assets/ui-resource/style_button_focus.tres" id="1"]
+[ext_resource type="StyleBox" uid="uid://bb4dd8i6lyy3t" path="res://assets/ui-resource/style_button_hover.tres" id="2"]
+[ext_resource type="StyleBox" uid="uid://senhdk0oyoy7" path="res://assets/ui-resource/style_button_pressed.tres" id="3"]
+[ext_resource type="StyleBox" uid="uid://bsewywv808dh2" path="res://assets/ui-resource/style_button_normal.tres" id="4"]
+[ext_resource type="StyleBox" uid="uid://cyycs4dy2r1e5" path="res://assets/ui-resource/style_dark_panel.tres" id="5"]
+[ext_resource type="Texture2D" uid="uid://gnl25ghjtyok" path="res://assets/images/check_square_grey_checkmark.png" id="6"]
+[ext_resource type="Texture2D" uid="uid://o577aucwphke" path="res://assets/images/check_square_grey_cross.png" id="7"]
+[ext_resource type="Texture2D" uid="uid://b6swp60dm3hgg" path="res://assets/images/check_square_grey.png" id="8"]
+[ext_resource type="StyleBox" uid="uid://b5cxurlxr1b0q" path="res://assets/ui-resource/style_panel.tres" id="9"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_d70j0"]
+bg_color = Color(0.43776295, 0.43776292, 0.4377629, 1)
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_0yqm8"]
+content_margin_left = 6.0
+
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_wnv0e"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_xgdp2"]
+bg_color = Color(0.6, 0.6, 0.6, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mdq3o"]
+bg_color = Color(0.48337668, 0.39379615, 0.6240529, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_2pwm0"]
+bg_color = Color(0.44019884, 0.4106126, 0.42594126, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_q58ee"]
+bg_color = Color(0.71335924, 0.6447572, 0.83341086, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_g7mml"]
+bg_color = Color(0.305975, 0.23791552, 0.4096223, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_28se0"]
+bg_color = Color(0.44019884, 0.4106126, 0.42594126, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_m0bdx"]
+bg_color = Color(0.71335924, 0.6447572, 0.83341086, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hns0y"]
+bg_color = Color(0.305975, 0.23791552, 0.4096223, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[resource]
+Button/font_sizes/font_size = 10
+Button/styles/disabled = SubResource("StyleBoxFlat_d70j0")
+Button/styles/focus = ExtResource("1")
+Button/styles/hover = ExtResource("2")
+Button/styles/hover_pressed = ExtResource("3")
+Button/styles/normal = ExtResource("4")
+Button/styles/pressed = ExtResource("3")
+CUS_DarkPanel/styles/panel = ExtResource("5")
+CUS_DarkPanelContainer/base_type = &"PanelContainer"
+CUS_DarkPanelContainer/styles/panel = ExtResource("5")
+CUS_FocusedButton/base_type = &"Button"
+CUS_FocusedButton/styles/focus = ExtResource("1")
+CUS_FocusedButton/styles/hover = ExtResource("2")
+CUS_FocusedButton/styles/hover_pressed = ExtResource("3")
+CUS_FocusedButton/styles/normal = ExtResource("1")
+CUS_FocusedButton/styles/pressed = ExtResource("3")
+CUS_LabelBig/base_type = &"Label"
+CUS_LabelBig/font_sizes/font_size = 14
+CUS_LabelSmall/base_type = &"Label"
+CUS_LabelSmall/font_sizes/font_size = 10
+CheckBox/icons/checked = ExtResource("6")
+CheckBox/icons/checked_disabled = ExtResource("7")
+CheckBox/icons/unchecked = ExtResource("8")
+CheckBox/styles/focus = SubResource("StyleBoxEmpty_0yqm8")
+CheckBox/styles/hover = SubResource("StyleBoxEmpty_0yqm8")
+CheckBox/styles/hover_pressed = SubResource("StyleBoxEmpty_0yqm8")
+CheckBox/styles/normal = SubResource("StyleBoxEmpty_0yqm8")
+CheckBox/styles/pressed = SubResource("StyleBoxEmpty_0yqm8")
+HBoxContainer/constants/separation = 2
+Label/font_sizes/font_size = 10
+Label/styles/normal = SubResource("StyleBoxEmpty_wnv0e")
+LineEdit/font_sizes/font_size = 10
+LineEdit/styles/focus = SubResource("StyleBoxFlat_xgdp2")
+OptionButton/font_sizes/font_size = 10
+Panel/styles/panel = ExtResource("9")
+RichTextLabel/font_sizes/bold_font_size = 10
+RichTextLabel/font_sizes/bold_italics_font_size = 10
+RichTextLabel/font_sizes/italics_font_size = 10
+RichTextLabel/font_sizes/mono_font_size = 10
+RichTextLabel/font_sizes/normal_font_size = 10
+SpinBox/constants/buttons_vertical_separation = 4
+SpinBox/constants/buttons_width = 24
+SpinBox/styles/down_background = SubResource("StyleBoxFlat_mdq3o")
+SpinBox/styles/down_background_disabled = SubResource("StyleBoxFlat_2pwm0")
+SpinBox/styles/down_background_hovered = SubResource("StyleBoxFlat_q58ee")
+SpinBox/styles/down_background_pressed = SubResource("StyleBoxFlat_g7mml")
+SpinBox/styles/up_background = SubResource("StyleBoxFlat_mdq3o")
+SpinBox/styles/up_background_disabled = SubResource("StyleBoxFlat_28se0")
+SpinBox/styles/up_background_hovered = SubResource("StyleBoxFlat_m0bdx")
+SpinBox/styles/up_background_pressed = SubResource("StyleBoxFlat_hns0y")
+VBoxContainer/constants/separation = 2

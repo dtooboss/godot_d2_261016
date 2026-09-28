@@ -1,0 +1,479 @@
+extends PanelContainer
+class_name AFK_SocketingWorkbenchPanel
+
+signal action_requested(cmd_str: String)
+signal item_hovered(item_data: Dictionary, global_pos: Vector2)
+signal item_unhovered()
+signal panel_closed()
+
+@onready var btn_close: Button = %BtnClose
+@onready var equip_slot_btn: Button = %EquipSlotBtn
+@onready var equip_name_label: RichTextLabel = %EquipNameLabel
+@onready var equip_sockets_label: Label = %EquipSocketsLabel
+@onready var equip_hint_label: Label = %EquipHintLabel
+
+@onready var tool_slot_btn: Button = %ToolSlotBtn
+@onready var btn_punch: Button = %BtnPunch
+@onready var punch_hint_label: Label = %PunchHintLabel
+
+@onready var sockets_grid: HBoxContainer = %SocketsGrid
+@onready var inlay_hint_label: Label = %InlayHintLabel
+
+@onready var btn_uninlay: Button = %BtnUninlay
+@onready var btn_take_out: Button = %BtnTakeOut
+
+var current_equipment: Dictionary = {}
+var current_tool: Dictionary = {}
+var current_page: int = 1
+var inventory_items: Array = []
+
+var _confirm_dialog: ConfirmationDialog = null
+
+## 过滤出真实有效的镶嵌物（服务端返回的空孔可能是 "" 或 null）
+static func get_valid_inlays(inlays_arr: Variant) -> Array:
+	var result: Array = []
+	if inlays_arr is Array:
+		for item in inlays_arr:
+			var s = str(item).strip_edges()
+			if not s.is_empty():
+				result.append(s)
+	return result
+
+func _ready() -> void:
+	if btn_close:
+		btn_close.pressed.connect(close)
+	if btn_take_out:
+		btn_take_out.pressed.connect(_on_take_out_pressed)
+	if btn_punch:
+		btn_punch.pressed.connect(_on_punch_pressed)
+	if btn_uninlay:
+		btn_uninlay.pressed.connect(_on_uninlay_pressed)
+		
+	if equip_slot_btn:
+		equip_slot_btn.mouse_entered.connect(_on_equip_slot_hovered)
+		equip_slot_btn.mouse_exited.connect(_on_slot_unhovered)
+	if tool_slot_btn:
+		tool_slot_btn.mouse_entered.connect(_on_tool_slot_hovered)
+		tool_slot_btn.mouse_exited.connect(_on_slot_unhovered)
+		
+	# 关键修复 1：启用 Control 拖拽事件转发，确保拖到上部装备框、打孔框、凹槽网格时 100% 能够响应
+	var forward_can_drop = func(_at_pos, data): return _can_drop_data(_at_pos, data)
+	var forward_drop = func(_at_pos, data): _drop_data(_at_pos, data)
+	
+	if equip_slot_btn:
+		equip_slot_btn.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
+	if tool_slot_btn:
+		tool_slot_btn.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
+	if sockets_grid:
+		sockets_grid.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
+		
+	_init_confirm_dialog()
+	_refresh_ui()
+
+func _init_confirm_dialog() -> void:
+	if _confirm_dialog == null:
+		_confirm_dialog = ConfirmationDialog.new()
+		_confirm_dialog.title = "工坊确认"
+		_confirm_dialog.ok_button_text = "确认"
+		_confirm_dialog.cancel_button_text = "取消"
+		add_child(_confirm_dialog)
+
+func open() -> void:
+	visible = true
+	_refresh_ui()
+
+func close() -> void:
+	visible = false
+	panel_closed.emit()
+
+func set_current_page(page_num: int) -> void:
+	if page_num > 0:
+		current_page = page_num
+
+func sync_inventory_data(items_list: Array, page_num: int = -1) -> void:
+	if page_num > 0:
+		current_page = page_num
+	inventory_items = items_list
+	
+	# 如果放置了装备，自动同步最新数据
+	if not current_equipment.is_empty():
+		var fid = current_equipment.get("file_id", "")
+		var found = false
+		for it in items_list:
+			if it is Dictionary and it.get("file_id", "") == fid:
+				current_equipment = it
+				found = true
+				break
+		if not found:
+			pass
+		_refresh_ui()
+
+func _refresh_ui() -> void:
+	if current_equipment.is_empty():
+		_render_empty_state()
+	else:
+		_render_equipment_state()
+
+func _render_empty_state() -> void:
+	equip_slot_btn.icon = null
+	equip_name_label.text = "[color=#888888]请放入待操作的装备[/color]"
+	equip_sockets_label.text = "凹槽状态: 未放置"
+	equip_hint_label.text = "从背包拖拽装备至此处，或右键点击装备"
+	
+	tool_slot_btn.icon = null
+	btn_punch.disabled = true
+	punch_hint_label.text = "请先放入装备"
+	
+	_clear_sockets_grid()
+	inlay_hint_label.text = "请先放入带孔装备以进行镶嵌"
+	
+	btn_uninlay.disabled = true
+	btn_take_out.disabled = true
+
+func _render_equipment_state() -> void:
+	btn_take_out.disabled = false
+	
+	# 1. 渲染装备基本信息
+	var eq_name = current_equipment.get("name", "未知装备")
+	var q_col = current_equipment.get("color", "#ffffff")
+	equip_name_label.text = "[color=%s][b]%s[/b][/color]" % [q_col, eq_name]
+	
+	if current_equipment.has("icon_texture"):
+		equip_slot_btn.icon = current_equipment["icon_texture"]
+	elif current_equipment.has("icon"):
+		var icon_p = current_equipment["icon"]
+		if not icon_p.is_empty():
+			var t = AnsiHelper.load_item_texture(icon_p)
+			if t: equip_slot_btn.icon = t
+			
+	var sockets = AnsiHelper.to_safe_int(current_equipment.get("sockets"), 0)
+	var max_sockets = AnsiHelper.to_safe_int(current_equipment.get("d2_max_sockets"), sockets)
+	if max_sockets < sockets:
+		max_sockets = sockets
+		
+	# 关键修复 3：过滤有效镶嵌物，杜绝把空孔 "" 误认为已镶嵌！
+	var valid_inlays = get_valid_inlays(current_equipment.get("inlays", []))
+	var inlay_cnt = valid_inlays.size()
+	
+	equip_sockets_label.text = "凹槽状态: %d 孔 (上限 %d 孔) | 已镶嵌 %d 孔" % [sockets, max_sockets, inlay_cnt]
+	equip_hint_label.text = "已就绪"
+	
+	# 2. 渲染打孔专区
+	var can_punch = (sockets < max_sockets)
+	if can_punch:
+		btn_punch.disabled = false
+		punch_hint_label.text = "当前 %d/%d 孔，可打孔 (+1)" % [sockets, max_sockets]
+	else:
+		btn_punch.disabled = true
+		if sockets == 0:
+			punch_hint_label.text = "该装备不可打孔"
+		else:
+			punch_hint_label.text = "已达底材最大孔数 (%d孔)，无法再打" % sockets
+			
+	# 打孔器槽位展示
+	if not current_tool.is_empty() and current_tool.has("icon_texture"):
+		tool_slot_btn.icon = current_tool["icon_texture"]
+	else:
+		tool_slot_btn.icon = null
+		
+	# 3. 渲染动态凹槽列表 (按序展示真实镶嵌物)
+	_render_sockets_grid(sockets, valid_inlays)
+	
+	# 4. 洗孔按钮状态：只有当真实已镶嵌数量 > 0 时才亮起！
+	if inlay_cnt > 0:
+		btn_uninlay.disabled = false
+		btn_uninlay.text = "🔴 挖除所有镶嵌物 (共%d颗/洗孔)" % inlay_cnt
+	else:
+		btn_uninlay.disabled = true
+		btn_uninlay.text = "🔴 挖除所有镶嵌物 (未镶嵌)"
+
+func _clear_sockets_grid() -> void:
+	for c in sockets_grid.get_children():
+		c.queue_free()
+
+func _render_sockets_grid(sock_count: int, valid_inlays: Array) -> void:
+	_clear_sockets_grid()
+	if sock_count <= 0:
+		var empty_lbl = Label.new()
+		empty_lbl.text = "当前装备暂无凹槽 (可先使用上方打孔)"
+		empty_lbl.add_theme_font_size_override("font_size", 11)
+		empty_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 1.0))
+		sockets_grid.add_child(empty_lbl)
+		inlay_hint_label.text = ""
+		return
+		
+	inlay_hint_label.text = "💡 可在背包直接右键或拖入符文/宝石填孔"
+	
+	for i in range(sock_count):
+		var slot_p = PanelContainer.new()
+		slot_p.custom_minimum_size = Vector2(40, 40)
+		
+		var slot_style = StyleBoxFlat.new()
+		slot_style.corner_radius_top_left = 3
+		slot_style.corner_radius_top_right = 3
+		slot_style.corner_radius_bottom_right = 3
+		slot_style.corner_radius_bottom_left = 3
+		slot_style.border_width_left = 1
+		slot_style.border_width_top = 1
+		slot_style.border_width_right = 1
+		slot_style.border_width_bottom = 1
+		
+		var is_inlaid = (i < valid_inlays.size())
+		var is_next = (i == valid_inlays.size())
+		
+		if is_inlaid:
+			slot_style.bg_color = Color(0.08, 0.08, 0.1, 0.95)
+			slot_style.border_color = Color(0.7, 0.6, 0.2, 0.8) # 镶嵌金色边框
+		elif is_next:
+			slot_style.bg_color = Color(0.06, 0.12, 0.08, 0.95)
+			slot_style.border_color = Color(0.3, 0.9, 0.4, 1.0) # 下一个待填孔：高亮绿色
+		else:
+			slot_style.bg_color = Color(0.04, 0.04, 0.05, 0.95)
+			slot_style.border_color = Color(0.25, 0.25, 0.25, 0.6) # 待填孔：暗灰
+			
+		slot_p.add_theme_stylebox_override("panel", slot_style)
+		
+		var v_box = VBoxContainer.new()
+		v_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		v_box.add_theme_constant_override("separation", 1)
+		
+		var num_lbl = Label.new()
+		num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		num_lbl.add_theme_font_size_override("font_size", 9)
+		num_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+		num_lbl.text = "%d孔" % (i + 1)
+		v_box.add_child(num_lbl)
+		
+		var icon_rect = TextureRect.new()
+		icon_rect.custom_minimum_size = Vector2(24, 24)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		
+		if is_inlaid:
+			var inlay_raw = str(valid_inlays[i])
+			var in_tex = AnsiHelper.load_item_texture(inlay_raw)
+			if in_tex:
+				icon_rect.texture = in_tex
+		else:
+			var socket_empty_p = "res://assets/images/gemsocket.lowend.png"
+			if ResourceLoader.exists(socket_empty_p):
+				icon_rect.texture = load(socket_empty_p)
+				icon_rect.modulate = Color(1, 1, 1, 0.45)
+				
+		v_box.add_child(icon_rect)
+		slot_p.add_child(v_box)
+		sockets_grid.add_child(slot_p)
+
+# ========== 拖拽接收逻辑 (Drag & Drop) ==========
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	if not (data is Dictionary):
+		return false
+	var it = data.get("item_data", {})
+	if it.is_empty():
+		return false
+		
+	# 1. 如果是打孔器
+	if _is_punch_tool(it):
+		return true
+		
+	# 2. 如果是镶嵌物 (符文/宝石/珠宝)
+	if _is_tessera(it):
+		if not current_equipment.is_empty():
+			var sockets = AnsiHelper.to_safe_int(current_equipment.get("sockets"), 0)
+			var valid_inlays = get_valid_inlays(current_equipment.get("inlays", []))
+			# 关键修复 2：只有真实已镶嵌数小于孔数时放行！
+			return (sockets > valid_inlays.size())
+		return false
+		
+	# 3. 如果是装备
+	if _is_equipment(it):
+		return true
+		
+	return false
+
+func _drop_data(_at_position: Vector2, data: Variant) -> void:
+	if not (data is Dictionary):
+		return
+	var it = data.get("item_data", {})
+	if it.is_empty():
+		return
+		
+	# 1. 拖入装备
+	if _is_equipment(it):
+		put_equipment(it)
+		return
+		
+	# 2. 拖入打孔器
+	if _is_punch_tool(it):
+		put_tool(it)
+		return
+		
+	# 3. 拖入镶嵌物
+	if _is_tessera(it):
+		_handle_inlay_tessera(it)
+		return
+
+func put_equipment(it: Dictionary) -> void:
+	current_equipment = it
+	_refresh_ui()
+
+func put_tool(it: Dictionary) -> void:
+	current_tool = it
+	_refresh_ui()
+
+func _is_equipment(it: Dictionary) -> bool:
+	# 优先排除明确的材料
+	if _is_tessera(it) or _is_punch_tool(it):
+		return false
+	if it.has("sockets") or it.has("d2_max_sockets"):
+		return true
+	if it.has("skill_type") or it.has("armor_type") or it.has("slot"):
+		return true
+	var q = str(it.get("quality", "")).to_lower()
+	if q in ["normal", "superior", "magic", "rare", "set", "unique", "crafted", "runeword"]:
+		return true
+	return false
+
+func _is_punch_tool(it: Dictionary) -> bool:
+	var raw_n = str(it.get("raw_name", "")) + str(it.get("name", ""))
+	var fid = str(it.get("file_id", ""))
+	return ("打孔器" in raw_n) or ("dakong" in fid)
+
+func _is_tessera(it: Dictionary) -> bool:
+	if bool(it.get("is_rune", false)) or AnsiHelper.to_safe_int(it.get("is_rune"), 0) == 1:
+		return true
+	if bool(it.get("is_gem", false)) or AnsiHelper.to_safe_int(it.get("is_gem"), 0) == 1:
+		return true
+	var d2_t = str(it.get("d2_type", ""))
+	if d2_t in ["宝石", "珠宝", "符文"]:
+		return true
+	var clean_n = str(it.get("name", ""))
+	var raw_n = str(it.get("raw_name", ""))
+	var all_n = clean_n + raw_n
+	if "符文" in all_n or "宝石" in all_n or "珠宝" in all_n or "金刚石" in all_n or "红宝石" in all_n or "蓝宝石" in all_n or "黄宝石" in all_n or "绿宝石" in all_n or "紫宝石" in all_n or "骷髅" in all_n or "钻石" in all_n or "刻面" in all_n:
+		return true
+	for i in range(1, 34):
+		if ("%d#" % i) in all_n or ("%d号" % i) in all_n:
+			return true
+	var icon_p = str(it.get("icon", ""))
+	if "misc/rune" in icon_p or "misc/gem" in icon_p or "rune" in icon_p:
+		return true
+	var fid = str(it.get("file_id", ""))
+	if "rune" in fid or "gem" in fid or "baoshi" in fid:
+		return true
+	return false
+
+# ========== 操作事件处理 ==========
+func _on_take_out_pressed() -> void:
+	current_equipment.clear()
+	current_tool.clear()
+	_refresh_ui()
+
+func _on_punch_pressed() -> void:
+	if current_equipment.is_empty():
+		return
+		
+	var eq_fid = current_equipment.get("file_id", "")
+	if eq_fid.is_empty():
+		return
+		
+	# 寻找打孔器
+	var tool_fid = ""
+	if not current_tool.is_empty():
+		tool_fid = current_tool.get("file_id", "")
+	else:
+		for it in inventory_items:
+			if it is Dictionary and _is_punch_tool(it):
+				tool_fid = it.get("file_id", "")
+				break
+				
+	if tool_fid.is_empty():
+		_show_alert("打孔失败", "背包中未找到【打孔器】！无法执行打孔。")
+		return
+		
+	var eq_name = current_equipment.get("name", "装备")
+	var sockets = AnsiHelper.to_safe_int(current_equipment.get("sockets"), 0)
+	var prompt = "确定消耗 1 个【打孔器】为【%s】打孔吗？\n(当前孔数: %d孔 -> %d孔)" % [eq_name, sockets, sockets + 1]
+	
+	_show_confirm("确认打孔", prompt, func():
+		action_requested.emit("gdakong %s %s %d" % [eq_fid, tool_fid, current_page])
+	)
+
+func handle_inlay_tessera(tessera: Dictionary) -> void:
+	_handle_inlay_tessera(tessera)
+
+func _handle_inlay_tessera(tessera: Dictionary) -> void:
+	if current_equipment.is_empty():
+		_show_alert("提示", "请先将待镶嵌的装备放入工坊中！")
+		return
+	var eq_fid = current_equipment.get("file_id", "")
+	var tess_fid = tessera.get("file_id", "")
+	if eq_fid.is_empty() or tess_fid.is_empty():
+		return
+		
+	var sockets = AnsiHelper.to_safe_int(current_equipment.get("sockets"), 0)
+	var valid_inlays = get_valid_inlays(current_equipment.get("inlays", []))
+	if valid_inlays.size() >= sockets:
+		_show_alert("提示", "该装备的孔位已全部镶满，无法再镶嵌！")
+		return
+		
+	var next_slot = valid_inlays.size() + 1
+	var eq_name = current_equipment.get("name", "装备")
+	var tess_name = tessera.get("name", "镶嵌物")
+	
+	var prompt = "确定要将【%s】镶嵌到【%s】的第 %d 孔吗？\n(注意: 除非使用洗孔清空，否则镶嵌物无法单独取下)" % [tess_name, eq_name, next_slot]
+	
+	_show_confirm("确认镶嵌", prompt, func():
+		action_requested.emit("ginlay %s %s %d" % [eq_fid, tess_fid, current_page])
+	)
+
+func _on_uninlay_pressed() -> void:
+	if current_equipment.is_empty():
+		return
+	var eq_fid = current_equipment.get("file_id", "")
+	if eq_fid.is_empty():
+		return
+		
+	var eq_name = current_equipment.get("name", "装备")
+	var valid_inlays = get_valid_inlays(current_equipment.get("inlays", []))
+	var in_cnt = valid_inlays.size()
+	
+	if in_cnt <= 0:
+		_show_alert("提示", "该装备当前没有镶嵌任何物品，无需洗孔。")
+		return
+		
+	var prompt = "⚠️ [color=red][b]高危操作：洗孔操作不可逆！[/b][/color]\n确定要挖除【%s】上的所有镶嵌物 (共%d颗) 吗？\n\n【注意】：槽内所有宝石/符文将全部碎裂化为齑粉，底材装备完好如新。" % [eq_name, in_cnt]
+	
+	_show_confirm("警告：确认洗孔", prompt, func():
+		action_requested.emit("guninlay %s %d" % [eq_fid, current_page])
+	)
+
+func _show_confirm(title_str: String, msg: String, on_ok: Callable) -> void:
+	_init_confirm_dialog()
+	_confirm_dialog.title = title_str
+	_confirm_dialog.dialog_text = msg
+	
+	for conn in _confirm_dialog.confirmed.get_connections():
+		_confirm_dialog.confirmed.disconnect(conn["callable"])
+		
+	_confirm_dialog.confirmed.connect(on_ok)
+	_confirm_dialog.popup_centered()
+
+func _show_alert(title_str: String, msg: String) -> void:
+	_init_confirm_dialog()
+	_confirm_dialog.title = title_str
+	_confirm_dialog.dialog_text = msg
+	for conn in _confirm_dialog.confirmed.get_connections():
+		_confirm_dialog.confirmed.disconnect(conn["callable"])
+	_confirm_dialog.popup_centered()
+
+func _on_equip_slot_hovered() -> void:
+	if not current_equipment.is_empty():
+		item_hovered.emit(current_equipment, equip_slot_btn.global_position)
+
+func _on_tool_slot_hovered() -> void:
+	if not current_tool.is_empty():
+		item_hovered.emit(current_tool, tool_slot_btn.global_position)
+
+func _on_slot_unhovered() -> void:
+	item_unhovered.emit()

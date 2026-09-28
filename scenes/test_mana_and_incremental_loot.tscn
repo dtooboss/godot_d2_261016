@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://c84b12d5e9f1a"]
+
+[ext_resource type="Script" path="res://scripts/test_mana_and_incremental_loot.gd" id="1_test"]
+
+[node name="TestManaAndIncrementalLoot" type="Node"]
+script = ExtResource("1_test")

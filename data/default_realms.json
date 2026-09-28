@@ -1,0 +1,22 @@
+[
+  {
+    "id": "season_1",
+    "name": "第一赛季 · 烈焰地狱",
+    "tag": "S1 赛季",
+    "is_season": true,
+    "status": "smooth",
+    "desc": "全新天梯赛季，专属符文之语与赛季掉落",
+    "host": "127.0.0.1",
+    "port": 7878
+  },
+  {
+    "id": "standard_1",
+    "name": "永恒之境 · 罗格营地",
+    "tag": "标准区",
+    "is_season": false,
+    "status": "hot",
+    "desc": "永久标准区，稳定沉淀角色与资产",
+    "host": "127.0.0.1",
+    "port": 7879
+  }
+]

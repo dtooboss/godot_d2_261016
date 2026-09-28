@@ -1,0 +1,176 @@
+[gd_scene load_steps=3 format=3 uid="uid://d3m8y1q4p7k0v"]
+
+[ext_resource type="Script" path="res://scripts/ui/party_hud_panel.gd" id="1_party_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_menu"]
+content_margin_left = 8.0
+content_margin_top = 6.0
+content_margin_right = 8.0
+content_margin_bottom = 6.0
+bg_color = Color(0.09, 0.08, 0.07, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.65, 0.52, 0.25, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.8)
+shadow_size = 6
+
+[node name="PartyHudPanel" type="Control"]
+custom_minimum_size = Vector2(290, 240)
+layout_mode = 3
+anchors_preset = 0
+offset_left = 12.0
+offset_top = 44.0
+offset_right = 302.0
+offset_bottom = 284.0
+mouse_filter = 2
+script = ExtResource("1_party_script")
+
+[node name="RootVBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 4
+
+[node name="HeaderHBox" type="HBoxContainer" parent="RootVBox"]
+custom_minimum_size = Vector2(190, 22)
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_constants/separation = 8
+
+[node name="LblTeamTitle" type="Label" parent="RootVBox/HeaderHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.9, 0.78, 0.45, 1)
+theme_override_font_sizes/font_size = 11
+text = "❖ 队伍 (2/5) ❖"
+vertical_alignment = 1
+
+[node name="BtnTeamAction" type="Button" parent="RootVBox/HeaderHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 20)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 10
+text = "解散队伍"
+
+[node name="MemberListVBox" type="VBoxContainer" parent="RootVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="ContextMenu" type="PanelContainer" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 50
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 0
+offset_right = 90.0
+offset_bottom = 80.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_menu")
+
+[node name="MenuVBox" type="VBoxContainer" parent="ContextMenu"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="BtnMenuTell" type="Button" parent="ContextMenu/MenuVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "💬 私聊"
+alignment = 0
+
+[node name="BtnMenuTransfer" type="Button" parent="ContextMenu/MenuVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "👑 移交队长"
+alignment = 0
+
+[node name="BtnMenuKick" type="Button" parent="ContextMenu/MenuVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 11
+text = "🚫 踢出队伍"
+alignment = 0
+
+[node name="ConfirmDialog" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+z_index = 60
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dim" type="ColorRect" parent="ConfirmDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.5)
+
+[node name="Center" type="CenterContainer" parent="ConfirmDialog"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="ConfirmDialog/Center"]
+custom_minimum_size = Vector2(220, 110)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_menu")
+
+[node name="VBox" type="VBoxContainer" parent="ConfirmDialog/Center/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ConfirmMsg" type="Label" parent="ConfirmDialog/Center/Panel/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+text = "确定要离开队伍吗？"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="BtnRow" type="HBoxContainer" parent="ConfirmDialog/Center/Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="BtnConfirmCancel" type="Button" parent="ConfirmDialog/Center/Panel/VBox/BtnRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "取消"
+
+[node name="BtnConfirmOk" type="Button" parent="ConfirmDialog/Center/Panel/VBox/BtnRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 22)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+text = "确定"

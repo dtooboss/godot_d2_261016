@@ -1,0 +1,218 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/socketing_workbench_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/style_dark_panel.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="3"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="4"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/accept.tres" id="5"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot_bg"]
+bg_color = Color(0.05, 0.05, 0.06, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.3, 0.2, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="SocketingWorkbenchPanel" type="PanelContainer"]
+custom_minimum_size = Vector2(340, 420)
+offset_right = 340.0
+offset_bottom = 420.0
+theme_override_styles/panel = ExtResource("2")
+script = ExtResource("1")
+
+[node name="MainVBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBar" type="PanelContainer" parent="MainVBox"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="HBox" type="HBoxContainer" parent="MainVBox/TitleBar"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TitleIcon" type="Label" parent="MainVBox/TitleBar/HBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = " ⚒️ "
+vertical_alignment = 1
+
+[node name="TitleLabel" type="Label" parent="MainVBox/TitleBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.9, 0.85, 0.65, 1)
+theme_override_font_sizes/font_size = 13
+text = "装备凹槽工坊 (打孔 / 镶嵌 / 洗孔)"
+vertical_alignment = 1
+
+[node name="BtnClose" type="Button" parent="MainVBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "✕"
+
+[node name="ContentMargin" type="MarginContainer" parent="MainVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="MainVBox/ContentMargin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="EquipSection" type="HBoxContainer" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="EquipSlotBox" type="PanelContainer" parent="MainVBox/ContentMargin/VBox/EquipSection"]
+custom_minimum_size = Vector2(54, 54)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot_bg")
+
+[node name="EquipSlotBtn" type="Button" parent="MainVBox/ContentMargin/VBox/EquipSection/EquipSlotBox"]
+unique_name_in_owner = true
+layout_mode = 2
+flat = true
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="EquipInfoVBox" type="VBoxContainer" parent="MainVBox/ContentMargin/VBox/EquipSection"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="EquipNameLabel" type="RichTextLabel" parent="MainVBox/ContentMargin/VBox/EquipSection/EquipInfoVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+bbcode_enabled = true
+text = "[color=#888888]请放入待操作的装备[/color]"
+fit_content = true
+scroll_active = false
+
+[node name="EquipSocketsLabel" type="Label" parent="MainVBox/ContentMargin/VBox/EquipSection/EquipInfoVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 11
+text = "凹槽状态: 未放置"
+
+[node name="EquipHintLabel" type="Label" parent="MainVBox/ContentMargin/VBox/EquipSection/EquipInfoVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.55, 0.55, 1)
+theme_override_font_sizes/font_size = 10
+text = "从背包或纸娃娃拖拽装备至此处"
+
+[node name="HSeparator1" type="HSeparator" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+
+[node name="PunchSection" type="VBoxContainer" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="PunchTitle" type="Label" parent="MainVBox/ContentMargin/VBox/PunchSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.75, 0.45, 1)
+theme_override_font_sizes/font_size = 12
+text = "【打孔】增加 1 个凹槽"
+
+[node name="PunchHBox" type="HBoxContainer" parent="MainVBox/ContentMargin/VBox/PunchSection"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ToolSlotBox" type="PanelContainer" parent="MainVBox/ContentMargin/VBox/PunchSection/PunchHBox"]
+custom_minimum_size = Vector2(38, 38)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot_bg")
+
+[node name="ToolSlotBtn" type="Button" parent="MainVBox/ContentMargin/VBox/PunchSection/PunchHBox/ToolSlotBox"]
+unique_name_in_owner = true
+layout_mode = 2
+flat = true
+icon_alignment = 1
+vertical_icon_alignment = 1
+expand_icon = true
+
+[node name="BtnPunch" type="Button" parent="MainVBox/ContentMargin/VBox/PunchSection/PunchHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 32)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/normal = ExtResource("5")
+theme_override_font_sizes/font_size = 12
+disabled = true
+text = "🔨 执行打孔"
+
+[node name="PunchHintLabel" type="Label" parent="MainVBox/ContentMargin/VBox/PunchSection/PunchHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 10
+text = "需消耗 1 个打孔器"
+vertical_alignment = 1
+
+[node name="HSeparator2" type="HSeparator" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+
+[node name="InlaySection" type="VBoxContainer" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="InlayTitle" type="Label" parent="MainVBox/ContentMargin/VBox/InlaySection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.75, 0.45, 1)
+theme_override_font_sizes/font_size = 12
+text = "【镶嵌】按序填入孔位 (拖入符文/宝石/珠宝)"
+
+[node name="SocketsGrid" type="HBoxContainer" parent="MainVBox/ContentMargin/VBox/InlaySection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="InlayHintLabel" type="Label" parent="MainVBox/ContentMargin/VBox/InlaySection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.8, 0.5, 1)
+theme_override_font_sizes/font_size = 10
+text = "💡 可任意翻页主背包，抓起符文或宝石直接拖到此处"
+
+[node name="HSeparator3" type="HSeparator" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+
+[node name="UninlaySection" type="HBoxContainer" parent="MainVBox/ContentMargin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="BtnUninlay" type="Button" parent="MainVBox/ContentMargin/VBox/UninlaySection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 30)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("4")
+theme_override_font_sizes/font_size = 11
+disabled = true
+text = "🔴 挖除所有镶嵌物 (洗孔)"
+
+[node name="BtnTakeOut" type="Button" parent="MainVBox/ContentMargin/VBox/UninlaySection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 30)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 11
+disabled = true
+text = "取出装备"

@@ -1,0 +1,107 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/world_map/world_map.gd" id="1"]
+[ext_resource type="Texture2D" path="res://mods/vanilla/assets/worlds/1/map.png" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/afk/world_map/change_world_panel.tscn" id="4"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_act"]
+bg_color = Color(0.12, 0.35, 0.65, 0.95)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="WorldMap" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="MapBackground" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="LineContainer" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SpotsContainer" type="Control" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TopLeftHBox" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 200.0
+offset_bottom = 44.0
+theme_override_constants/separation = 4
+
+[node name="NamePanel" type="PanelContainer" parent="TopLeftHBox"]
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_act")
+
+[node name="Margin" type="MarginContainer" parent="TopLeftHBox/NamePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_right = 8
+
+[node name="WorldNameLabel" type="Label" parent="TopLeftHBox/NamePanel/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "哀伤草原"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="BtnSwitchAct" type="Button" parent="TopLeftHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(28, 26)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 12
+text = "⇆"
+
+[node name="BtnClose" type="Button" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(60, 26)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -76.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 42.0
+grow_horizontal = 0
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 11
+text = "返回战场"
+
+[node name="ChangeWorldPanel" parent="." instance=ExtResource("4")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1

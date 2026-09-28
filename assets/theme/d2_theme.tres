@@ -1,0 +1,11 @@
+[gd_resource type="Theme" load_steps=2 format=3 uid="uid://d2blizzardtheme1"]
+
+[ext_resource type="FontFile" uid="uid://c62rxget41nu1" path="res://assets/fonts/blizzardglobal-v5_81.ttf" id="1_font"]
+
+[resource]
+default_font = ExtResource("1_font")
+default_font_size = 14
+Label/fonts/font = ExtResource("1_font")
+Button/fonts/font = ExtResource("1_font")
+RichTextLabel/fonts/normal_font = ExtResource("1_font")
+RichTextLabel/fonts/bold_font = ExtResource("1_font")

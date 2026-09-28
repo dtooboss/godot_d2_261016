@@ -1,0 +1,334 @@
+extends PanelContainer
+class_name AFK_CubePanel
+
+## 赫拉迪克魔盒面板 (D2R 风格) — 瘦客户端纯渲染
+## 数据全部来自服务端 gcube 状态帧; 交互只发指令 (gcube put/take/takeall/transmute)
+## 格子复用 InvSlotButton: 品质边框/数量角标/孔位层/拖拽白得
+
+signal action_requested(cmd_str: String)
+signal item_hovered(item_data: Dictionary, global_pos: Vector2)
+signal item_unhovered()
+
+const COLS: int = 3
+const ROWS: int = 4
+const TOTAL_SLOTS: int = COLS * ROWS # 12 格 (D2R 方块 3x4)
+
+var slots: Array[InvSlotButton] = []
+var items_map: Dictionary = {}
+
+var _grid: GridContainer
+var _recipe_label: Label
+var _hint_label: Label
+var _btn_transmute: Button
+var _flash: ColorRect
+var _transmute_pending: bool = false
+var _last_items_sig: String = ""
+
+func _ready() -> void:
+	visible = false
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	_build_ui()
+
+func _build_ui() -> void:
+	# 铜色浮雕外框 (P3 换自产贴图)
+	var frame := StyleBoxFlat.new()
+	frame.bg_color = Color(0.09, 0.07, 0.045, 0.98)
+	frame.border_width_left = 2
+	frame.border_width_top = 2
+	frame.border_width_right = 2
+	frame.border_width_bottom = 2
+	frame.border_color = Color(0.55, 0.4, 0.18, 1.0)
+	frame.set_corner_radius_all(6)
+	frame.set_content_margin_all(12.0)
+	add_theme_stylebox_override("panel", frame)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	add_child(vbox)
+
+	# 标题栏 (标题 + 关闭 ✕)
+	var title_box := HBoxContainer.new()
+	vbox.add_child(title_box)
+
+	var title := Label.new()
+	title.text = "◆ 赫拉迪克方块 ◆"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 15)
+	title.add_theme_color_override("font_color", Color(0.9, 0.76, 0.4))
+	title_box.add_child(title)
+
+	var btn_close := Button.new()
+	btn_close.text = "✕"
+	btn_close.custom_minimum_size = Vector2(24, 24)
+	btn_close.focus_mode = Control.FOCUS_NONE
+	btn_close.add_theme_font_size_override("font_size", 13)
+	btn_close.add_theme_color_override("font_color", Color(0.7, 0.6, 0.4))
+	btn_close.add_theme_color_override("font_hover_color", Color(1.0, 0.85, 0.5))
+	var close_style := StyleBoxFlat.new()
+	close_style.bg_color = Color(0, 0, 0, 0)
+	btn_close.add_theme_stylebox_override("normal", close_style)
+	btn_close.add_theme_stylebox_override("hover", close_style)
+	btn_close.add_theme_stylebox_override("pressed", close_style)
+	btn_close.pressed.connect(_close)
+	title_box.add_child(btn_close)
+
+	# 3x4 格子区
+	_grid = GridContainer.new()
+	_grid.columns = COLS
+	_grid.add_theme_constant_override("h_separation", 4)
+	_grid.add_theme_constant_override("v_separation", 4)
+	_grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(_grid)
+
+	for i in range(TOTAL_SLOTS):
+		var btn := InvSlotButton.new()
+		btn.custom_minimum_size = Vector2(44, 44)
+		btn.flat = false
+		btn.panel_owner = self
+		btn.slot_type = "cube"
+		btn.slot_index = i
+		btn.focus_mode = Control.FOCUS_NONE
+
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.06, 0.05, 0.035, 0.95)
+		style.set_border_width_all(1)
+		style.border_color = Color(0.4, 0.3, 0.14, 0.9)
+		style.set_corner_radius_all(3)
+		btn.add_theme_stylebox_override("normal", style)
+		var hover_style := style.duplicate()
+		hover_style.border_color = Color(0.9, 0.76, 0.4, 1.0)
+		btn.add_theme_stylebox_override("hover", hover_style)
+
+		btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+		btn.expand_icon = true
+
+		btn.mouse_entered.connect(_on_slot_hovered.bind(i, btn))
+		btn.mouse_exited.connect(_on_slot_unhovered)
+		btn.gui_input.connect(_on_slot_gui_input.bind(i))
+		_grid.add_child(btn)
+		slots.append(btn)
+
+	# 配方名提示行 (D2R: 材料匹配时盒子下方浮现配方名, 金色)
+	_recipe_label = Label.new()
+	_recipe_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_recipe_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_recipe_label.custom_minimum_size = Vector2(160, 0)
+	_recipe_label.add_theme_font_size_override("font_size", 12)
+	_recipe_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.4))
+	_recipe_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+	_recipe_label.add_theme_constant_override("shadow_offset_y", 1)
+	_recipe_label.hide()
+	vbox.add_child(_recipe_label)
+
+	# 通用提示行 (暗灰)
+	_hint_label = Label.new()
+	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_hint_label.custom_minimum_size = Vector2(160, 0)
+	_hint_label.add_theme_font_size_override("font_size", 11)
+	_hint_label.add_theme_color_override("font_color", Color(0.55, 0.52, 0.45))
+	vbox.add_child(_hint_label)
+
+	# 按钮排
+	var btn_box := HBoxContainer.new()
+	btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_box.add_theme_constant_override("separation", 10)
+	vbox.add_child(btn_box)
+
+	_btn_transmute = Button.new()
+	_btn_transmute.text = "⚗ 转 换"
+	_btn_transmute.custom_minimum_size = Vector2(110, 34)
+	_btn_transmute.add_theme_font_size_override("font_size", 14)
+	_style_accent_button(_btn_transmute)
+	_btn_transmute.pressed.connect(_on_transmute_pressed)
+	btn_box.add_child(_btn_transmute)
+
+	var btn_takeall := Button.new()
+	btn_takeall.text = "⇱ 取回"
+	btn_takeall.custom_minimum_size = Vector2(76, 34)
+	btn_takeall.add_theme_font_size_override("font_size", 12)
+	_style_accent_button(btn_takeall, true)
+	btn_takeall.pressed.connect(func(): action_requested.emit("gcube takeall"))
+	btn_box.add_child(btn_takeall)
+
+	# 转换闪光层
+	_flash = ColorRect.new()
+	_flash.color = Color(1, 1, 1, 0)
+	_flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_flash)
+
+func _style_accent_button(btn: Button, secondary: bool = false) -> void:
+	var style := StyleBoxFlat.new()
+	style.set_corner_radius_all(4)
+	style.set_border_width_all(1)
+	if secondary:
+		style.bg_color = Color(0.12, 0.1, 0.06, 0.95)
+		style.border_color = Color(0.45, 0.36, 0.18, 0.9)
+	else:
+		style.bg_color = Color(0.3, 0.13, 0.05, 0.97)
+		style.border_color = Color(0.75, 0.5, 0.2, 1.0)
+	btn.add_theme_stylebox_override("normal", style)
+	var hover := style.duplicate()
+	hover.border_color = Color(0.95, 0.78, 0.4, 1.0)
+	hover.bg_color = style.bg_color.lightened(0.08)
+	btn.add_theme_stylebox_override("hover", hover)
+	var disabled := style.duplicate()
+	disabled.bg_color = Color(0.1, 0.09, 0.08, 0.8)
+	disabled.border_color = Color(0.25, 0.22, 0.18, 0.6)
+	btn.add_theme_stylebox_override("disabled", disabled)
+	btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55))
+	btn.add_theme_color_override("font_disabled_color", Color(0.45, 0.42, 0.38))
+
+# ========== 服务端 gcube 状态帧渲染 (纯数据驱动) ==========
+func render_gcube_data(data: Dictionary) -> void:
+	items_map.clear()
+	for btn in slots:
+		btn.icon = null
+		if btn.has_method("set_slot_amount"):
+			btn.set_slot_amount(0)
+		if btn.has_method("set_slot_quality"):
+			btn.set_slot_quality("")
+		if btn.has_method("set_slot_sockets"):
+			btn.set_slot_sockets(0, [])
+
+	var items = data.get("items", [])
+	var sig := ""
+	for i in range(items.size()):
+		if not (items[i] is Dictionary):
+			continue
+		sig += str(items[i].get("file_id", "")) + ";"
+		if i >= slots.size():
+			break
+		var it: Dictionary = items[i]
+		var item_data := {
+			"name": AnsiHelper.to_plain_text(str(it.get("name", ""))),
+			"raw_name": str(it.get("name", "")),
+			"quality": str(it.get("quality", "normal")),
+			"type": str(it.get("quality", "normal")).capitalize(),
+			"color": "#a59263",
+			"desc": str(it.get("item_info", {}).get("desc", "")) if it.get("item_info") is Dictionary else str(it.get("name", "")),
+			"cmd": str(it.get("cmd", "")),
+			"file_id": str(it.get("file_id", "")),
+			"amount": AnsiHelper.to_safe_int(it.get("amount"), 1),
+			"sockets": AnsiHelper.to_safe_int(it.get("sockets"), 0),
+			"inlays": it.get("inlays", []) if it.get("inlays") is Array else [],
+		}
+		var tex := AnsiHelper.load_item_texture(str(it.get("icon", "")))
+		if tex:
+			item_data["icon_texture"] = tex
+			slots[i].icon = tex
+		if btn_has(slots[i], "set_slot_amount"):
+			slots[i].set_slot_amount(item_data["amount"])
+		if btn_has(slots[i], "set_slot_quality"):
+			slots[i].set_slot_quality(item_data["quality"])
+		if btn_has(slots[i], "set_slot_sockets"):
+			slots[i].set_slot_sockets(item_data["sockets"], item_data["inlays"])
+		items_map[i] = item_data
+
+	# 配方名提示 (D2R 手感之魂: 材料放对时浮现)
+	var matched := str(data.get("matched_recipe", ""))
+	if matched.is_empty():
+		_recipe_label.hide()
+	else:
+		_recipe_label.text = "✨ %s" % matched
+		_recipe_label.show()
+
+	_btn_transmute.disabled = not bool(data.get("can_transmute", false))
+	_hint_label.text = str(data.get("transmute_hint", ""))
+
+	# 转换生效闪光: 点击转换后帧内物品签名变化 → 白闪 + 不再 pending
+	if _transmute_pending:
+		_transmute_pending = false
+		if sig != _last_items_sig:
+			_play_flash()
+	_last_items_sig = sig
+
+func btn_has(btn: Button, method: String) -> bool:
+	return btn.has_method(method)
+
+func _play_flash() -> void:
+	_flash.color.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(_flash, "color:a", 0.55, 0.08)
+	tween.tween_property(_flash, "color:a", 0.0, 0.12)
+	tween.tween_property(_flash, "color:a", 0.35, 0.08)
+	tween.tween_property(_flash, "color:a", 0.0, 0.2)
+
+func _on_transmute_pressed() -> void:
+	_transmute_pending = true
+	action_requested.emit("gcube transmute")
+
+# ========== 悬浮 tooltip (转发 HUD 通用 tooltip) ==========
+func _on_slot_hovered(slot_idx: int, btn: Button) -> void:
+	if items_map.has(slot_idx):
+		item_hovered.emit(items_map[slot_idx], btn.global_position)
+
+func _on_slot_unhovered() -> void:
+	item_unhovered.emit()
+
+# ========== 格子右键取出 / (左键无动作) ==========
+func _on_slot_gui_input(event: InputEvent, slot_idx: int) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_RIGHT and items_map.has(slot_idx):
+			var fid := str(items_map[slot_idx].get("file_id", ""))
+			if not fid.is_empty():
+				action_requested.emit("gcube take %s" % fid)
+
+# ========== 拖拽: 接收背包物品放入 (source=main_bag) ==========
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	if data is Dictionary and data.get("source") == "main_bag":
+		return true
+	return false
+
+func _drop_data(_at_position: Vector2, data: Variant) -> void:
+	if data is Dictionary:
+		var it = data.get("item_data", {})
+		var fid = str(it.get("file_id", ""))
+		if not fid.is_empty():
+			action_requested.emit("gcube put %s" % fid)
+
+# ========== InvSlotButton panel_owner 转发接口 ==========
+func get_slot_drag_data(_slot_type: String, slot_idx: int) -> Variant:
+	if not items_map.has(slot_idx):
+		return null
+	var it: Dictionary = items_map[slot_idx]
+	var preview := TextureRect.new()
+	if it.has("icon_texture"):
+		preview.texture = it["icon_texture"]
+	preview.custom_minimum_size = Vector2(36, 36)
+	preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	preview.modulate = Color(1, 1, 1, 0.8)
+	if get_viewport() and get_viewport().gui_is_dragging():
+		set_drag_preview(preview)
+	return {
+		"source": "cube",
+		"slot_idx": slot_idx,
+		"item_data": it,
+	}
+
+func can_slot_drop_data(_slot_type: String, _slot_idx: int, data: Variant) -> bool:
+	# 格子直接接收背包物品拖放 (与面板空白区同语义; 小口袋同款模式)
+	if data is Dictionary and data.get("source") == "main_bag":
+		return true
+	return false
+
+func on_slot_drop_data(_slot_type: String, _slot_idx: int, data: Variant) -> void:
+	if data is Dictionary:
+		var it = data.get("item_data", {})
+		var fid = str(it.get("file_id", ""))
+		if not fid.is_empty():
+			action_requested.emit("gcube put %s" % fid)
+
+func _input(event: InputEvent) -> void:
+	if not visible:
+		return
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		_close()
+
+func _close() -> void:
+	visible = false
+	item_unhovered.emit()

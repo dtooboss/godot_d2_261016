@@ -1,0 +1,1043 @@
+extends Control
+class_name AFK_MainHUD
+
+const MonsterDisplayScene = preload("res://scenes/afk/components/monster_display.tscn")
+
+# 战场多点位动态槽位池配置 (优化横向与纵向间距，错落有致无遮挡)
+const SLOT_POSITIONS = [
+	Vector2(0.24, 0.52), # Slot 0: 左前
+	Vector2(0.76, 0.52), # Slot 1: 右前
+	Vector2(0.36, 0.40), # Slot 2: 左后
+	Vector2(0.64, 0.40), # Slot 3: 右后
+	Vector2(0.50, 0.56), # Slot 4: 中前
+	Vector2(0.16, 0.44), # Slot 5: 远左翼
+	Vector2(0.84, 0.44), # Slot 6: 远右翼
+]
+const BOSS_SLOT = Vector2(0.50, 0.46) # Boss 居中王座
+@onready var btn_return_town: Button = %BtnReturnTown
+@onready var btn_return_map: Button = %BtnReturnMap
+@onready var btn_loot_check: Button = %BtnLootCheck
+@onready var current_map_label: Label = %CurrentMapLabel
+@onready var boss_progress_label: Label = %BossProgressLabel
+@onready var boss_progress_bar: ProgressBar = %BossProgressBar
+
+@onready var monster_display: AFK_MonsterDisplay = %MonsterDisplay
+@onready var battle_statistics: AFK_BattleStatistics = %BattleStatistics
+@onready var player_bottom_bar: AFK_PlayerBottomBar = %PlayerBottomBar
+@onready var inventory_panel: Control = %PlayerInventoryPanel
+@onready var char_info_panel: Control = %CharacterInfoPanel
+@onready var control_matrix: AFK_ControlMatrixPanel = %ControlMatrixPanel
+@onready var item_tooltip: Control = %ItemTooltip
+@onready var world_map: AFK_WorldMap = %WorldMap
+@onready var pickup_setting_panel: Control = %PickupSettingPanel
+@onready var salvage_dialog: Control = %SalvageUniqueConfirmDialog
+@onready var skill_panel: AFK_SkillPanel = %SkillPanel
+@onready var collapsible_chat: AFK_CollapsibleChatPanel = %CollapsibleChatPanel
+@onready var team_invite_dialog: Control = get_node_or_null("%TeamInviteDialog")
+@onready var party_hud_panel: Control = get_node_or_null("%PartyHudPanel")
+@onready var right_sidebar: Control = %RightSidebar
+@onready var btn_toggle_sidebar: Button = %BtnToggleSidebar
+var is_sidebar_expanded: bool = true
+
+var cube_panel: AFK_CubePanel = null
+
+
+var current_boss_kills: int = 0
+var max_boss_kills: int = 300
+var sync_timer: float = 0.0
+
+func _ready() -> void:
+	if btn_return_town:
+		btn_return_town.pressed.connect(_on_return_town_pressed)
+	if btn_return_map:
+		btn_return_map.pressed.connect(_on_return_map_pressed)
+	if char_info_panel:
+		if char_info_panel.has_signal("item_hovered") and item_tooltip:
+			char_info_panel.item_hovered.connect(func(item_data, pos):
+				item_tooltip.show_item(item_data, pos)
+			)
+			char_info_panel.item_unhovered.connect(func():
+				item_tooltip.hide_tooltip()
+			)
+		if char_info_panel.has_signal("panel_visibility_changed"):
+			char_info_panel.panel_visibility_changed.connect(_on_char_panel_visibility_changed)
+
+
+	if btn_toggle_sidebar:
+		_setup_toggle_button_style()
+		btn_toggle_sidebar.pressed.connect(toggle_sidebar)
+
+	
+	if inventory_panel and item_tooltip:
+		inventory_panel.item_hovered.connect(func(item_data, pos):
+			item_tooltip.show_item(item_data, pos)
+		)
+		inventory_panel.item_unhovered.connect(func():
+			item_tooltip.hide_tooltip()
+		)
+		
+	if world_map:
+		world_map.hide()
+		world_map.enter_spot.connect(_on_spot_selected)
+		world_map.closed.connect(func(): world_map.hide())
+		
+	if control_matrix:
+		control_matrix.btn_character_clicked.connect(toggle_character_info)
+		control_matrix.btn_pickup_clicked.connect(toggle_pickup_setting)
+		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
+		control_matrix.btn_shop_clicked.connect(func(): NetworkClient.send_raw("shop"))
+		control_matrix.btn_skills_clicked.connect(toggle_skill_panel)
+		control_matrix.btn_craft_clicked.connect(toggle_cube_panel)
+		control_matrix.btn_reset_points_clicked.connect(func(): NetworkClient.send_raw("reset"))
+		control_matrix.btn_exit_clicked.connect(_on_exit_to_title)
+
+	if skill_panel:
+		skill_panel.hide()
+		skill_panel.skill_learn_requested.connect(func(code: String):
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("glearn " + code)
+		)
+		skill_panel.skill_reset_requested.connect(func():
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("gresetskill")
+		)
+		skill_panel.skill_set_binding_requested.connect(func(code: String, slot: String):
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("gsetskill %s %s" % [code, slot])
+		)
+
+	# 赫拉迪克魔盒浮窗 (gcube 系统功能, 无实体方块门槛)
+	if cube_panel == null:
+		cube_panel = AFK_CubePanel.new()
+		add_child(cube_panel)
+		cube_panel.visible = false
+		cube_panel.action_requested.connect(func(cmd: String):
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw(cmd)
+		)
+		cube_panel.item_hovered.connect(func(item_data, pos):
+			if item_tooltip:
+				item_tooltip.show_item(item_data, pos)
+		)
+		cube_panel.item_unhovered.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
+
+	# 挂机战斗专属可回缩传音视窗联动
+	if collapsible_chat:
+		collapsible_chat.item_inspected.connect(_on_chat_item_inspected)
+		
+	_update_boss_ui()
+	_hook_network_client()
+	
+	if party_hud_panel:
+		if GameState.is_in_team:
+			party_hud_panel.update_party(GameState.current_team_members)
+		party_hud_panel.tell_requested.connect(func(target_id):
+			if collapsible_chat and collapsible_chat.chat_input:
+				collapsible_chat.chat_input.text = "/tell %s " % target_id
+				collapsible_chat.chat_input.grab_focus()
+				collapsible_chat.chat_input.caret_column = collapsible_chat.chat_input.text.length()
+		)
+		party_hud_panel.team_dismiss_requested.connect(func():
+			if not GameState.is_team_leader():
+				show_toast("正在脱离队伍并安全返回主城营地...")
+				await get_tree().create_timer(0.3).timeout
+				_on_return_town_pressed()
+		)
+	
+	# 向 LPC 请求初始核心全量数据帧
+	_request_lpc_sync()
+
+func _process(delta: float) -> void:
+	# 每 1.5 秒与 LPC 服务端同步全景战斗快照 (ghp1) 与角色基础属性 (gscore)
+	sync_timer += delta
+	if sync_timer >= 1.5:
+		sync_timer = 0.0
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("ghp1")
+			NetworkClient.send_raw("gscore")
+
+func _request_lpc_sync() -> void:
+	if NetworkClient.is_connected:
+		print("[AFK_MainHUD] 正在向 LPC 发送 ghp1, gscore, gbag 1, look 初始化指令...")
+		NetworkClient.send_raw("ghp1")
+		NetworkClient.send_raw("gscore")
+		NetworkClient.send_raw("gbag 1")
+		NetworkClient.send_raw("look")
+
+func _on_return_town_pressed() -> void:
+	print("[AFK_MainHUD] 正在返回主城安全大本营: res://scenes/town/town_hub.tscn")
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("look")
+	get_tree().change_scene_to_file("res://scenes/town/town_hub.tscn")
+
+func _on_return_map_pressed() -> void:
+	if world_map:
+		world_map.show()
+
+func _on_spot_selected(spot_data: Dictionary) -> void:
+	var s_name = spot_data.get("name", "鲜血荒地")
+	var s_lvl = spot_data.get("lvl", 1)
+	if current_map_label:
+		current_map_label.text = s_name
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("ghp1")
+
+func _update_boss_ui() -> void:
+	var pct = int((float(current_boss_kills) / float(max_boss_kills)) * 100.0)
+	if boss_progress_label:
+		boss_progress_label.text = "BOSS进度: (%d/%d) %d%%" % [current_boss_kills, max_boss_kills, pct]
+	if boss_progress_bar:
+		boss_progress_bar.value = pct
+
+func _on_exit_to_title() -> void:
+	get_tree().change_scene_to_file("res://scenes/login/login_screen.tscn")
+
+func _hook_network_client() -> void:
+	# 1. 从 GameState 兜底初始化
+	var cdata = GameState.selected_character
+	if not cdata.is_empty():
+		var cname = str(cdata.get("name", "英雄"))
+		var clevel = int(cdata.get("level", 1))
+		var clife = int(cdata.get("life", 173))
+		var cmana = int(cdata.get("mana", 84))
+		var cgold = int(cdata.get("gold", 0))
+		if player_bottom_bar:
+			player_bottom_bar.update_player_info("Lv.%d %s" % [clevel, cname])
+			player_bottom_bar.update_hp(clife, clife)
+			player_bottom_bar.update_mp(cmana, cmana)
+		if inventory_panel and inventory_panel.gold_label:
+			inventory_panel.gold_label.text = "%sG" % str(cgold)
+			
+	# 2. 监听 LPC 战网事件 (防重连接保护)
+	if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
+		var net = get_node_or_null("/root/NetworkClient")
+		if net:
+			print("[AFK_MainHUD] Connected to NetworkClient successfully")
+			if not net.json_frame_received.is_connected(_on_network_json):
+				net.json_frame_received.connect(_on_network_json)
+			if not net.text_received.is_connected(_on_network_text):
+				net.text_received.connect(_on_network_text)
+
+static func _safe_int(val: Variant, default_val: int = 0) -> int:
+	if val == null:
+		return default_val
+	if val is int:
+		return val
+	if val is float:
+		return int(val)
+	if val is String:
+		return val.to_int() if val.is_valid_int() else default_val
+	return default_val
+
+## -------------------------------------------------------------
+## LPC 服务端专属协议解构
+## -------------------------------------------------------------
+func _on_network_json(type: String, data: Variant) -> void:
+	# 0. LPC 专属拾取与分解帧 (gfenjie)
+	if type == "gfenjie" and data is Dictionary:
+		var action = str(data.get("action", ""))
+		if action == "config" or action == "save_success":
+			var cfg = data.get("config", {})
+			if pickup_setting_panel and pickup_setting_panel.has_method("open_with_config"):
+				pickup_setting_panel.open_with_config(cfg)
+		elif action == "salvage_result":
+			var count = _safe_int(data.get("count"), 1)
+			var it_name = str(data.get("item_name", "装备"))
+			var rewards = data.get("rewards", {})
+			var gold = _safe_int(rewards.get("gold"), 0)
+			var dust = _safe_int(rewards.get("dust"), 0)
+			var shard = _safe_int(rewards.get("shard"), 0)
+			print("[AFK_MainHUD] 分解成功: %s, 获得金币: +%d, 魔尘: +%d, 暗金碎片: +%d" % [it_name, gold, dust, shard])
+			
+	# 1. LPC 专属全结构化角色属性帧 (gscore)
+	if type == "gscore" and data is Dictionary:
+		var cname = str(data.get("name", "英雄"))
+		var lvl = _safe_int(data.get("level"), 1)
+		var hp = _safe_int(data.get("hp"), 0)
+		var max_hp = _safe_int(data.get("max_hp"), 1)
+		var mp = _safe_int(data.get("mp"), 0)
+		var max_mp = _safe_int(data.get("max_mp"), 1)
+		var zone = str(data.get("zone", ""))
+		
+		if player_bottom_bar:
+			player_bottom_bar.update_player_info("Lv.%d %s" % [lvl, cname])
+			player_bottom_bar.update_hp(hp, max_hp)
+			player_bottom_bar.update_mp(mp, max_mp)
+		if not zone.is_empty() and current_map_label:
+			current_map_label.text = AnsiHelper.to_plain_text(zone)
+		if char_info_panel and char_info_panel.has_method("render_gscore_data"):
+			char_info_panel.render_gscore_data(data)
+
+			
+	# 2. LPC 专属背包帧 (gbag)
+	elif type == "gbag" and data is Dictionary:
+		var items_list = data.get("items", [])
+		var charm_used = _safe_int(data.get("charm_used_slots"), -1)
+		var charm_max = _safe_int(data.get("charm_max_slots"), 40)
+		var total_pages = _safe_int(data.get("pages"), 1)
+		var cur_page = _safe_int(data.get("page", data.get("current_page")), 1)
+		print("[AFK_MainHUD] 收到 LPC 专属背包帧 gbag: %d 件物品, 护身符口袋: %d/%d, 总页数: %d, 当前页: %d" % [items_list.size(), charm_used, charm_max, total_pages, cur_page])
+		if inventory_panel:
+			inventory_panel.render_lpc_items(items_list, charm_used, charm_max, total_pages, cur_page, data)
+			
+	# 3. 经典状态帧 (status / charhp)
+	elif (type == "status" or type == "charhp") and data is Dictionary:
+		var hp = _safe_int(data.get("qi", data.get("hp")), 0)
+		var max_hp = _safe_int(data.get("max_qi", data.get("max_hp")), 1)
+		var mp = _safe_int(data.get("jing", data.get("mp")), 0)
+		var max_mp = _safe_int(data.get("max_jing", data.get("max_mp")), 1)
+		var gold = _safe_int(data.get("gold"), -1)
+		if hp > 0 and player_bottom_bar:
+			player_bottom_bar.update_hp(hp, max_hp)
+		if mp > 0 and player_bottom_bar:
+			player_bottom_bar.update_mp(mp, max_mp)
+		if gold >= 0 and inventory_panel:
+			if inventory_panel.has_method("update_gold"):
+				inventory_panel.update_gold(gold)
+			elif inventory_panel.gold_label:
+				inventory_panel.gold_label.text = "%dG" % gold
+			
+	# 4. 场景标题 (title / room)
+	elif (type == "title" or type == "room") and data is Dictionary:
+		var rname = str(data.get("name", ""))
+		if not rname.is_empty() and current_map_label:
+			current_map_label.text = AnsiHelper.to_plain_text(rname)
+			
+	# 5. LPC 专属凹槽工坊帧 (gsocket)
+	elif type == "gsocket" and data is Dictionary:
+		if inventory_panel and inventory_panel.socketing_workbench_panel:
+			inventory_panel.socketing_workbench_panel.render_workbench_data(data)
+
+	# 6. LPC 专属赫拉迪克魔盒帧 (gcube)
+	elif type == "gcube" and data is Dictionary:
+		if cube_panel:
+			cube_panel.render_gcube_data(data)
+
+	# 7. LPC 专属全结构化技能树帧 (gskills)
+	elif type == "gskills" and data is Dictionary:
+		if skill_panel:
+			skill_panel.render_gskills_data(data)
+		# 实时同步当前主攻技能到界面底栏
+		var main_sk = str(data.get("main_skill", ""))
+		if player_bottom_bar and player_bottom_bar.skill_name_label:
+			if not main_sk.is_empty():
+				var sk_info = data.get("skills", {}).get(main_sk, {})
+				var sk_display = sk_info.get("name", main_sk) if sk_info is Dictionary else main_sk
+				player_bottom_bar.skill_name_label.text = "【主攻】" + sk_display
+			else:
+				player_bottom_bar.skill_name_label.text = "普通攻击"
+
+	# 8. LPC 专属轻提示帧 (toast)
+	elif type == "toast":
+		show_toast(str(data))
+
+	# 9. LPC 专属频道广播帧 (channel: chat/bill/rumor 等)
+	elif type == "channel":
+		var channel_text = ""
+		if data is Dictionary:
+			channel_text = str(data.get("text", data.get("msg", "")))
+		elif data is String:
+			channel_text = data
+		if not channel_text.is_empty():
+			_process_chat_text(channel_text)
+
+	# 10. LPC 普通文本/富文本/系统反馈帧 (text: 队伍聊天/系统提示/操作报错)
+	elif type == "text":
+		var plain_or_ansi = ""
+		if data is String:
+			plain_or_ansi = data
+		elif data is Dictionary:
+			plain_or_ansi = str(data.get("text", data.get("msg", "")))
+		if not plain_or_ansi.is_empty():
+			_process_chat_text(plain_or_ansi)
+
+	# 11. LPC 复合交互面板帧 (panel: 组队邀请确认、交互菜单等)
+	elif type == "panel" and data is Dictionary:
+		var desc = str(data.get("desc", ""))
+		var raw_actions = data.get("actions", [])
+		var actions: Array = raw_actions if raw_actions is Array else []
+		
+		var is_team_invite = false
+		var accept_cmd = ""
+		var reject_cmd = "look"
+		
+		var clean_desc = AnsiHelper.to_plain_text(desc)
+		if "邀请你加入" in clean_desc or "组队" in clean_desc:
+			is_team_invite = true
+			
+		for act in actions:
+			if act is Dictionary:
+				var cmd = str(act.get("cmd", ""))
+				var raw_lbl = str(act.get("label", act.get("name", "")))
+				var clean_lbl = AnsiHelper.to_plain_text(raw_lbl).strip_edges()
+				
+				if cmd.begins_with("team with "):
+					is_team_invite = true
+					accept_cmd = cmd
+				elif clean_lbl == "接受" and accept_cmd.is_empty():
+					accept_cmd = cmd
+				elif clean_lbl == "拒绝":
+					reject_cmd = cmd
+					
+		if is_team_invite and not accept_cmd.is_empty():
+			if team_invite_dialog:
+				team_invite_dialog.show_invite(desc, accept_cmd, reject_cmd)
+			return
+			
+		if item_tooltip and item_tooltip.visible:
+			item_tooltip._on_network_json("panel", data)
+
+	# 12. LPC 专属组队更新帧 (team: 队长与队员实时列表及血量)
+	elif type == "team" and data is Dictionary:
+		var leader_id = str(data.get("leader", ""))
+		var raw_m = data.get("members", [])
+		var members: Array = raw_m if raw_m is Array else []
+		GameState.update_team_data(leader_id, members)
+		if party_hud_panel and party_hud_panel.has_method("update_party"):
+			party_hud_panel.update_party(members)
+
+	# 13. LPC 线性推关进场帧 (stage_enter)
+	elif type == "stage_enter" and data is Dictionary:
+		var s_name = str(data.get("name", "挂机副本"))
+		GameState.current_stage_info = data
+		if current_map_label:
+			current_map_label.text = s_name
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("ghp1")
+
+	# 14. LPC 前端战斗全景快照帧 (gstatus: 由 ghp1 驱动)
+	elif type == "gstatus" and data is Dictionary:
+		_handle_gstatus_data(data)
+
+	# 15. LPC 实时战斗打击帧 (combat: 由 d2_combatd 与 message_combatd 驱动)
+	elif type == "combat" and data is Dictionary:
+		_handle_combat_data(data)
+
+	# 16. LPC 击杀掉落与战利品气泡帧 (reward_pop)
+	elif type == "reward_pop" and data is Dictionary:
+		_handle_reward_pop(data)
+
+var _active_monsters: Array = []
+var _current_target_id: String = ""
+var _monster_instances: Dictionary = {} # mid (String) -> AFK_MonsterDisplay
+var _occupied_slots: Dictionary = {}    # slot_idx (int) -> mid (String)
+var _last_killed_slot: int = -1
+
+## 为新怪物随机动态分配空闲战场槽位 (Boss 居中，小怪随机且异位刷新)
+func _allocate_slot_for_monster(rank: String) -> int:
+	if rank == "boss":
+		return -99 # Boss 独占居中王座
+		
+	var free_slots: Array = []
+	for i in range(SLOT_POSITIONS.size()):
+		if not _occupied_slots.has(i):
+			free_slots.append(i)
+			
+	if free_slots.is_empty():
+		return 0
+		
+	# 满足用户需求：“比如中间的死了，下一个刷到其他位置”
+	# 如果有多个空闲槽位且包含刚刚击杀的槽位，优先排除刚刚死过的点位
+	if free_slots.size() > 1 and _last_killed_slot in free_slots:
+		free_slots.erase(_last_killed_slot)
+		
+	free_slots.shuffle()
+	return free_slots[0]
+
+## 应用归一化锚点坐标至怪物节点，自适应视口拉伸
+func _apply_monster_slot_position(m_node: AFK_MonsterDisplay, slot_idx: int) -> void:
+	var pos_ratio = BOSS_SLOT if slot_idx == -99 else SLOT_POSITIONS[slot_idx]
+	m_node.anchor_left = pos_ratio.x
+	m_node.anchor_right = pos_ratio.x
+	m_node.anchor_top = pos_ratio.y
+	m_node.anchor_bottom = pos_ratio.y
+	m_node.offset_left = 0
+	m_node.offset_right = 0
+	m_node.offset_top = 0
+	m_node.offset_bottom = 0
+
+## 处理 LPC 前端全景战斗快照
+func _handle_gstatus_data(data: Dictionary) -> void:
+	# 1. 关卡与 Boss 进度
+	var st = data.get("stage", {})
+	if st is Dictionary and not st.is_empty():
+		var s_name = str(st.get("stage_name", ""))
+		if not s_name.is_empty() and current_map_label:
+			current_map_label.text = s_name
+			
+		current_boss_kills = _safe_int(st.get("kill_step"), 0)
+		max_boss_kills = max(1, _safe_int(st.get("threshold"), 1000))
+		var boss_active = _safe_int(st.get("boss_active"), 0)
+		
+		# Boss 降临特写呈现
+		if boss_active == 1:
+			if boss_progress_label:
+				boss_progress_label.text = "👑 【领主降临】魔王大军已至，全员集火！"
+				boss_progress_label.add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+		else:
+			_update_boss_ui()
+			if boss_progress_label:
+				boss_progress_label.remove_theme_color_override("font_color")
+
+	# 2. 多点位怪群同屏渲染与异位出生管理
+	var raw_m = data.get("monsters", [])
+	_active_monsters = raw_m if raw_m is Array else []
+	
+	var incoming_ids: Array = []
+	var parent_viewport = monster_display.get_parent() if monster_display else null
+	
+	for m in _active_monsters:
+		if not m is Dictionary: continue
+		var mid = str(m.get("id", ""))
+		if mid.is_empty(): continue
+		incoming_ids.append(mid)
+		
+		var m_rank = str(m.get("rank", "normal"))
+		var m_node: AFK_MonsterDisplay = _monster_instances.get(mid, null)
+		
+		if m_node == null or not is_instance_valid(m_node):
+			# 发现新怪物！动态分配槽位并在对应点位生成
+			if _monster_instances.is_empty() and monster_display and not is_instance_valid(_monster_instances.get(monster_display.cur_id)):
+				m_node = monster_display
+			else:
+				m_node = MonsterDisplayScene.instantiate()
+				if parent_viewport:
+					parent_viewport.add_child(m_node)
+					
+			var slot_idx = _allocate_slot_for_monster(m_rank)
+			m_node.slot_index = slot_idx
+			if slot_idx != -99:
+				_occupied_slots[slot_idx] = mid
+				
+			_apply_monster_slot_position(m_node, slot_idx)
+			m_node.bind_monster_data(m)
+			m_node.play_spawn_animation()
+			
+			if not m_node.target_clicked.is_connected(_on_monster_target_clicked):
+				m_node.target_clicked.connect(_on_monster_target_clicked)
+				
+			_monster_instances[mid] = m_node
+		else:
+			# 存活怪物刷新血量
+			m_node.update_hp(_safe_int(m.get("hp")), _safe_int(m.get("max_hp")))
+			
+	# 清理服务端已移除的过期怪
+	var to_clean: Array = []
+	for mid in _monster_instances.keys():
+		if not mid in incoming_ids:
+			to_clean.append(mid)
+	for mid in to_clean:
+		var node = _monster_instances[mid]
+		_monster_instances.erase(mid)
+		if is_instance_valid(node):
+			if _occupied_slots.has(node.slot_index):
+				_occupied_slots.erase(node.slot_index)
+			if node != monster_display:
+				node.queue_free()
+			else:
+				node.visible = false
+				
+	_update_target_focus()
+	
+	# 3. 队友同屏血量联动
+	var raw_team = data.get("team", [])
+	if party_hud_panel and raw_team is Array and raw_team.size() > 0:
+		party_hud_panel.update_party(raw_team)
+
+## 智能集火目标更新 (Boss > 暗金 > 勇士 > 残血)
+func _update_target_focus() -> void:
+	var current_node = _monster_instances.get(_current_target_id, null)
+	if current_node == null or not is_instance_valid(current_node) or current_node.cur_hp <= 0 or current_node.is_dying:
+		_current_target_id = ""
+		
+	if _current_target_id.is_empty() and _active_monsters.size() > 0:
+		var best_score = -999999
+		var best_id = ""
+		for m in _active_monsters:
+			var mid = str(m.get("id", ""))
+			var m_node = _monster_instances.get(mid, null)
+			if m_node == null or not is_instance_valid(m_node) or m_node.is_dying: continue
+			var hp = m_node.cur_hp
+			var max_hp = max(1, m_node.max_hp)
+			if hp <= 0: continue
+			
+			var rank = str(m.get("rank", "normal"))
+			var k = str(m.get("mon_key", ""))
+			var ratio = (hp * 100) / max_hp
+			
+			var score = 0
+			if rank == "boss": score += 2000
+			elif rank == "unique": score += 800
+			elif rank == "champion": score += 400
+			if "shaman" in k or "unraveler" in k: score += 600
+			score += (100 - ratio) * 5
+			
+			if score > best_score:
+				best_score = score
+				best_id = mid
+		_current_target_id = best_id
+		
+	# 刷新所有在场怪物节点的聚焦金色角标
+	for mid in _monster_instances.keys():
+		var node = _monster_instances[mid]
+		if is_instance_valid(node):
+			node.set_focused(mid == _current_target_id)
+			
+	# 向后兼容：确保 monster_display 句柄始终指向当前主集火目标
+	if not _current_target_id.is_empty() and _monster_instances.has(_current_target_id):
+		var target_node = _monster_instances[_current_target_id]
+		if is_instance_valid(target_node):
+			monster_display = target_node
+
+## 处理玩家点击任意怪物手动转火
+func _on_monster_target_clicked(mid: String) -> void:
+	if not mid.is_empty() and _monster_instances.has(mid):
+		_current_target_id = mid
+		_update_target_focus()
+
+## 处理 LPC 实时打击与伤害事件
+func _handle_combat_data(data: Dictionary) -> void:
+	var atk_id = str(data.get("attacker", ""))
+	var vic_id = str(data.get("victim", ""))
+	var vic_uuid = str(data.get("victim_uuid", ""))
+	var dmg = _safe_int(data.get("dmg"), 0)
+	var elem = str(data.get("elem", "物理"))
+	var is_crit = (_safe_int(data.get("crit"), 0) == 1)
+	var result = str(data.get("result", "hit"))
+	
+	# 1. 精准寻找受击怪物实例 (优先 UUID，其次当前目标，再次匹配 key)
+	var hit_node: AFK_MonsterDisplay = null
+	if not vic_uuid.is_empty() and _monster_instances.has(vic_uuid):
+		hit_node = _monster_instances[vic_uuid]
+	elif not _current_target_id.is_empty() and (_current_target_id in vic_id or vic_id in _current_target_id):
+		hit_node = _monster_instances.get(_current_target_id, null)
+	else:
+		for mid in _monster_instances.keys():
+			var n = _monster_instances[mid]
+			if is_instance_valid(n) and not n.is_dying and (n.cur_mon_key in vic_id or vic_id in n.cur_id):
+				hit_node = n
+				break
+				
+	if hit_node and is_instance_valid(hit_node) and hit_node.visible:
+		# 飘字与受击动效
+		if result == "miss":
+			hit_node.spawn_damage(0, elem, false, false)
+		elif result == "dodge":
+			hit_node.spawn_damage(-1, elem, false, false)
+		elif result == "block":
+			hit_node.spawn_damage(-2, elem, false, false)
+		else:
+			hit_node.spawn_damage(dmg, elem, is_crit, false)
+			hit_node.play_hit_reaction(is_crit)
+			
+		# 更新受击怪当前血量 (负数规范化为 0)
+		var vic_hp = max(0, _safe_int(data.get("you_hp"), 0))
+		var vic_max_hp = _safe_int(data.get("you_max_hp"), -1)
+		hit_node.update_hp(vic_hp, vic_max_hp)
+		
+		# 核心致死判定：血量归零即刻触发该点位怪物就地死亡消散！
+		if vic_hp <= 0 and not hit_node.is_dying:
+			var dead_mid = hit_node.cur_id
+			var dead_slot = hit_node.slot_index
+			_last_killed_slot = dead_slot
+			if _occupied_slots.has(dead_slot):
+				_occupied_slots.erase(dead_slot)
+				
+			hit_node.play_death_animation(func():
+				_monster_instances.erase(dead_mid)
+				if hit_node != monster_display:
+					hit_node.queue_free()
+				else:
+					hit_node.visible = false
+			)
+			
+			# 若阵亡的是当前主目标，0 延迟平滑转火下一只存活怪
+			if dead_mid == _current_target_id:
+				_current_target_id = ""
+				_update_target_focus()
+				
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("ghp1")
+				
+		# 状态机变色 (DoT)
+		if "毒" in elem:
+			hit_node.set_dot_state(true, false)
+		elif "冰" in elem:
+			hit_node.set_dot_state(false, true)
+			
+	elif not _is_user_or_team_member(vic_id) and not _monster_instances.is_empty():
+		# 2. AoE 弧线飘字
+		if dmg > 0:
+			var any_node = _monster_instances.get(_current_target_id, null)
+			if any_node and is_instance_valid(any_node):
+				any_node.spawn_damage(dmg, elem, is_crit, true)
+				
+	# 3. 若受击者是玩家自己，扣减玩家底栏生命
+	var my_id = GameState.player_id
+	if (not my_id.is_empty() and my_id == vic_id) or (atk_id != my_id and _is_user_or_team_member(vic_id)):
+		var p_hp = max(0, _safe_int(data.get("you_hp"), -1))
+		var p_max = _safe_int(data.get("you_max_hp"), -1)
+		if p_hp >= 0 and player_bottom_bar:
+			player_bottom_bar.update_hp(p_hp, p_max)
+
+## 0 延迟即刻平滑切向下一个存活目标
+func _switch_to_next_target(dead_id: String) -> void:
+	if dead_id == _current_target_id:
+		_current_target_id = ""
+	_update_target_focus()
+
+func _is_user_or_team_member(id_str: String) -> bool:
+	if id_str.is_empty(): return false
+	if GameState.player_id == id_str: return true
+	for m in GameState.current_team_members:
+		if str(m.get("id")) == id_str or str(m.get("char_id")) == id_str:
+			return true
+	return false
+
+## 处理战利品与掉落奖励 (0 延迟即刻增量入包)
+func _handle_reward_pop(data: Dictionary) -> void:
+	var gold = _safe_int(data.get("gold"), 0)
+	var exp_val = _safe_int(data.get("exp"), 0)
+	var it = data.get("item")
+	var mon_name = str(data.get("monster_name", ""))
+	var prefix = ("击杀【%s】" % mon_name) if not mon_name.is_empty() else "战斗胜利！"
+	
+	var msg = ""
+	if it is Dictionary and not it.is_empty():
+		var iname = str(it.get("raw_name", it.get("name", "战利品")))
+		msg = "%s获得战利品：%s (金币+%d, 经验+%d)" % [prefix, iname, gold, exp_val]
+		# 增量落入背包当前页第一个空闲槽位并播放高光动效！
+		if inventory_panel and inventory_panel.has_method("add_incremental_reward"):
+			inventory_panel.add_incremental_reward(it, gold)
+	elif gold > 0:
+		msg = "%s金币 +%d, 经验 +%d" % [prefix, gold, exp_val]
+		if inventory_panel and inventory_panel.has_method("update_gold"):
+			inventory_panel.update_gold(inventory_panel.current_player_gold + gold)
+	elif exp_val > 0:
+		msg = "%s经验 +%d" % [prefix, exp_val]
+		
+	if not msg.is_empty():
+		show_toast(msg)
+
+## 挂机战斗主场景中的公频与文本分流处理器
+func _process_chat_text(text: String) -> void:
+	var clean = AnsiHelper.to_plain_text(text).strip_edges()
+	if clean.is_empty(): return
+	
+	if "『闲聊』" in clean or "闲聊" in clean:
+		var raw_replaced = text.replace("闲聊", "世界")
+		var bb = AnsiHelper.to_bbcode(raw_replaced)
+		GameState.add_chat_message(bb, clean.replace("闲聊", "世界"))
+	elif "『交易』" in clean or "【队伍】" in clean or "『队伍』" in clean or "『" in clean or "【" in clean or "说：" in clean:
+		var bb = AnsiHelper.to_bbcode(text)
+		GameState.add_chat_message(bb, clean)
+	elif "加入队伍" in clean or "解散队伍" in clean or "组队" in clean:
+		GameState.add_chat_message("[color=#ffd700]" + clean + "[/color]", clean)
+		show_toast(clean)
+
+## 点击公频聊天中装备超链接，弹出装备悬浮面板
+func _on_chat_item_inspected(file_id: String) -> void:
+	if item_tooltip:
+		var mouse_pos = get_viewport().get_mouse_position()
+		item_tooltip.show_item({ "file_id": file_id, "cmd": "glookitem " + file_id }, mouse_pos)
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("glookitem " + file_id)
+
+var _toast_label: Label = null
+
+func show_toast(msg: String) -> void:
+	var clean = AnsiHelper.to_plain_text(msg).strip_edges()
+	if clean.is_empty():
+		return
+	if not _toast_label:
+		_toast_label = Label.new()
+		_toast_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_toast_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_toast_label.add_theme_font_size_override("font_size", 16)
+		_toast_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4, 1.0))
+		_toast_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
+		_toast_label.add_theme_constant_override("shadow_offset_x", 1)
+		_toast_label.add_theme_constant_override("shadow_offset_y", 1)
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.1, 0.1, 0.12, 0.9)
+		style.set_content_margin_all(8.0)
+		style.corner_radius_top_left = 6
+		style.corner_radius_top_right = 6
+		style.corner_radius_bottom_left = 6
+		style.corner_radius_bottom_right = 6
+		style.border_width_left = 1
+		style.border_width_top = 1
+		style.border_width_right = 1
+		style.border_width_bottom = 1
+		style.border_color = Color(0.6, 0.5, 0.2, 0.8)
+		_toast_label.add_theme_stylebox_override("normal", style)
+		_toast_label.z_index = 100
+		_toast_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_toast_label)
+
+	_toast_label.text = clean
+	_toast_label.reset_size()
+	_toast_label.position = Vector2((size.x - _toast_label.size.x) / 2.0, size.y * 0.35)
+	_toast_label.modulate.a = 0.0
+	_toast_label.visible = true
+
+	var tween = create_tween()
+	tween.tween_property(_toast_label, "modulate:a", 1.0, 0.15)
+	tween.tween_interval(1.8)
+	tween.tween_property(_toast_label, "modulate:a", 0.0, 0.35)
+	tween.tween_callback(func(): if _toast_label: _toast_label.visible = false)
+
+func _on_network_text(text: String) -> void:
+	if "造成" in text or "伤害" in text or "hit" in text.to_lower():
+		if monster_display:
+			var rand_dmg = randi_range(15, 80)
+			monster_display.spawn_damage(rand_dmg)
+
+	if "不足" in text or "无法装备" in text or "拿不动" in text or "专属装备" in text or "你装备了" in text or "你脱下了" in text:
+		show_toast(text)
+
+
+func _setup_toggle_button_style() -> void:
+	if not btn_toggle_sidebar:
+		return
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.08, 0.08, 0.09, 0.92)
+	style.border_width_left = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_width_right = 0
+	style.border_color = Color(0.35, 0.3, 0.2, 0.8)
+	style.corner_radius_top_left = 4
+	style.corner_radius_bottom_left = 4
+	btn_toggle_sidebar.add_theme_stylebox_override("normal", style)
+	
+	var hover = style.duplicate()
+	hover.border_color = Color(0.9, 0.8, 0.3, 1.0)
+	hover.bg_color = Color(0.14, 0.14, 0.16, 0.98)
+	btn_toggle_sidebar.add_theme_stylebox_override("hover", hover)
+	btn_toggle_sidebar.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4, 1))
+
+func toggle_sidebar() -> void:
+	set_sidebar_expanded(not is_sidebar_expanded)
+
+func set_sidebar_expanded(expand: bool) -> void:
+	is_sidebar_expanded = expand
+	if right_sidebar:
+		right_sidebar.visible = is_sidebar_expanded
+		
+	# 如果折叠收起，同时隐藏小口袋与悬浮窗
+	if not is_sidebar_expanded:
+		if inventory_panel and inventory_panel.little_pocket_panel:
+			inventory_panel.little_pocket_panel.hide()
+		if item_tooltip:
+			item_tooltip.hide_tooltip()
+
+	_update_toggle_button_position()
+	# 魔盒浮窗跟随侧栏开合重新贴位
+	if cube_panel and cube_panel.visible:
+		_position_cube_panel()
+
+func _update_toggle_button_position() -> void:
+	if not btn_toggle_sidebar:
+		return
+	if is_sidebar_expanded:
+		btn_toggle_sidebar.text = "▶"
+		btn_toggle_sidebar.offset_left = -320.0
+		btn_toggle_sidebar.offset_right = -304.0
+	else:
+		btn_toggle_sidebar.text = "◀"
+		btn_toggle_sidebar.offset_left = -16.0
+		btn_toggle_sidebar.offset_right = 0.0
+
+func _unhandled_input(event: InputEvent) -> void:
+	# 1. 焦点阻断：当玩家在聊天输入框打字时，彻底屏蔽所有挂机游戏操作快捷键
+	var focus_owner = get_viewport().gui_get_focus_owner()
+	if focus_owner is LineEdit or focus_owner is TextEdit:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			focus_owner.release_focus()
+			get_viewport().set_input_as_handled()
+		return
+
+	if event is InputEventKey and event.pressed:
+		# 支持 Alt+Q 一键折叠/展开右侧边栏
+		if event.keycode == KEY_C and not event.echo:
+			get_viewport().set_input_as_handled()
+			toggle_character_info()
+		elif event.keycode == KEY_P and not event.echo:
+			get_viewport().set_input_as_handled()
+			toggle_pickup_setting()
+		elif event.keycode == KEY_T and not event.echo:
+			get_viewport().set_input_as_handled()
+			toggle_skill_panel()
+		elif event.alt_pressed and event.keycode == KEY_Q:
+			get_viewport().set_input_as_handled()
+			toggle_sidebar()
+
+
+func toggle_character_info() -> void:
+	if not char_info_panel:
+		return
+	if char_info_panel.visible:
+		char_info_panel.close()
+	else:
+		# 单窗口互斥: 关魔盒与技能面板
+		if skill_panel and skill_panel.visible:
+			skill_panel.close()
+		if cube_panel and cube_panel.visible:
+			cube_panel.visible = false
+		item_tooltip.hide_tooltip()
+		char_info_panel.open()
+
+func toggle_skill_panel() -> void:
+	if not skill_panel:
+		return
+	if skill_panel.visible:
+		skill_panel.close()
+	else:
+		# 单窗口互斥
+		if char_info_panel and char_info_panel.visible:
+			char_info_panel.close()
+		if cube_panel and cube_panel.visible:
+			cube_panel.visible = false
+		if pickup_setting_panel and pickup_setting_panel.visible:
+			pickup_setting_panel.hide()
+		item_tooltip.hide_tooltip()
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("gskills")
+		else:
+			skill_panel.open()
+
+# 魔盒开合: 单窗口互斥 (关纸娃娃/工坊/小口袋), 打开时拉取服务端实时状态帧, 位置贴右侧栏
+func toggle_cube_panel() -> void:
+	if cube_panel == null:
+		return
+	if cube_panel.visible:
+		cube_panel.visible = false
+		item_tooltip.hide_tooltip()
+	else:
+		# 单窗口互斥
+		if char_info_panel and char_info_panel.visible:
+			char_info_panel.close()
+		if inventory_panel:
+			if inventory_panel.socketing_workbench_panel:
+				inventory_panel.socketing_workbench_panel.close()
+			if inventory_panel.little_pocket_panel:
+				inventory_panel.little_pocket_panel.hide()
+		item_tooltip.hide_tooltip()
+		cube_panel.visible = true
+		NetworkClient.send_raw("gcube")
+		await get_tree().process_frame
+		_position_cube_panel()
+
+func _position_cube_panel() -> void:
+	if cube_panel == null or not cube_panel.visible:
+		return
+	# 侧栏展开时让开侧栏宽度 (约 320px), 折叠时贴屏幕右缘
+	var right_margin := 336.0 if is_sidebar_expanded else 16.0
+	var x := size.x - right_margin - cube_panel.size.x
+	var y := (size.y - cube_panel.size.y) * 0.5
+	cube_panel.position = Vector2(max(10.0, x), max(10.0, y))
+
+func _on_char_panel_visibility_changed(is_visible: bool) -> void:
+	if not control_matrix:
+		return
+	var btn_char = control_matrix.btn_character if "btn_character" in control_matrix else control_matrix.get_node_or_null("%BtnCharacter")
+	if btn_char:
+		if is_visible:
+			var active_style = StyleBoxFlat.new()
+			active_style.bg_color = Color(0.1, 0.55, 0.15, 1.0) # 绿色高亮
+			active_style.border_width_left = 1
+			active_style.border_width_top = 1
+			active_style.border_width_right = 1
+			active_style.border_width_bottom = 1
+			active_style.border_color = Color(0.2, 0.85, 0.25, 1.0)
+			active_style.corner_radius_top_left = 2
+			active_style.corner_radius_top_right = 2
+			active_style.corner_radius_bottom_right = 2
+			active_style.corner_radius_bottom_left = 2
+			btn_char.add_theme_stylebox_override("normal", active_style)
+		else:
+			btn_char.remove_theme_stylebox_override("normal")
+
+# ========== 拖拽分解 (Drag to Salvage) ==========
+func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
+	if data is Dictionary and data.get("source") == "main_bag":
+		return true
+	return false
+
+func _drop_data(_at_position: Vector2, data: Variant) -> void:
+	if data is Dictionary and data.get("source") == "main_bag":
+		var it = data.get("item_data", {})
+		_handle_item_salvage_drop(it)
+
+func _handle_item_salvage_drop(item_data: Dictionary) -> void:
+	var fid = str(item_data.get("file_id", ""))
+	if fid.is_empty():
+		return
+		
+	# 检查是否为受保护的护身符
+	var is_charm = bool(item_data.get("is_charm", false))
+	var in_pocket = bool(item_data.get("in_charm_bag", false))
+	if is_charm or in_pocket:
+		print("[AFK_MainHUD] 护身符受到系统保护，无法分解！")
+		return
+		
+	var qual = str(item_data.get("quality", "normal")).to_lower()
+	var confirm_unique_enabled = true
+	if pickup_setting_panel and pickup_setting_panel.has_method("get") and pickup_setting_panel.current_config:
+		confirm_unique_enabled = bool(pickup_setting_panel.current_config.get("confirm_unique", true))
+		
+	if qual == "unique" and confirm_unique_enabled:
+		if salvage_dialog:
+			salvage_dialog.prompt_confirm(item_data, func(target_fid):
+				_send_lpc_cmd("gfenjie one %s %d" % [target_fid, _bag_page()])
+			)
+	else:
+		# 普通/蓝装/黄装秒级便捷分解 (保当前页)
+		_send_lpc_cmd("gfenjie one %s %d" % [fid, _bag_page()])
+
+# 背包当前浏览页 (供分解等操作保页码)
+func _bag_page() -> int:
+	if inventory_panel and "current_page" in inventory_panel:
+		return inventory_panel.current_page
+	return 1
+
+func toggle_pickup_setting() -> void:
+	if not pickup_setting_panel:
+		return
+	if pickup_setting_panel.visible:
+		pickup_setting_panel.hide_panel()
+		_update_pickup_btn_style(false)
+	else:
+		pickup_setting_panel.show_panel()
+		_update_pickup_btn_style(true)
+
+func _update_pickup_btn_style(is_active: bool) -> void:
+	if not control_matrix:
+		return
+	var btn_p = control_matrix.get_node_or_null("%BtnPickup")
+	if btn_p:
+		if is_active:
+			var active_style = StyleBoxFlat.new()
+			active_style.bg_color = Color(0.1, 0.55, 0.15, 1.0)
+			active_style.border_width_left = 1
+			active_style.border_width_top = 1
+			active_style.border_width_right = 1
+			active_style.border_width_bottom = 1
+			active_style.border_color = Color(0.2, 0.85, 0.25, 1.0)
+			active_style.corner_radius_top_left = 2
+			active_style.corner_radius_top_right = 2
+			active_style.corner_radius_bottom_right = 2
+			active_style.corner_radius_bottom_left = 2
+			btn_p.add_theme_stylebox_override("normal", active_style)
+			btn_p.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		else:
+			btn_p.remove_theme_stylebox_override("normal")
+			btn_p.remove_theme_color_override("font_color")
+
+func _send_lpc_cmd(cmd: String) -> void:
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw(cmd)

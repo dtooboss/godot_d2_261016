@@ -1,0 +1,163 @@
+[gd_scene load_steps=5 format=3 uid="uid://c8y8v6g1q4w9m"]
+
+[ext_resource type="Script" path="res://scripts/ui/team_invite_dialog.gd" id="1_script"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="2_title_sb"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_modal"]
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+bg_color = Color(0.08, 0.075, 0.065, 0.98)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.65, 0.52, 0.25, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+shadow_color = Color(0, 0, 0, 0.85)
+shadow_size = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_btn_accept"]
+content_margin_left = 18.0
+content_margin_top = 6.0
+content_margin_right = 18.0
+content_margin_bottom = 6.0
+bg_color = Color(0.22, 0.17, 0.08, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.85, 0.7, 0.3, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="TeamInviteDialog" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.6)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(400, 230)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal")
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/Panel"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleBar" type="PanelContainer" parent="CenterContainer/Panel/VBox"]
+custom_minimum_size = Vector2(0, 30)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("2_title_sb")
+
+[node name="HBox" type="HBoxContainer" parent="CenterContainer/Panel/VBox/TitleBar"]
+layout_mode = 2
+
+[node name="SpacerLeft" type="Control" parent="CenterContainer/Panel/VBox/TitleBar/HBox"]
+custom_minimum_size = Vector2(8, 0)
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 14
+text = "❖ 庇护之地 · 组队邀请 ❖"
+vertical_alignment = 1
+
+[node name="BtnClose" type="Button" parent="CenterContainer/Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(26, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "✕"
+flat = true
+
+[node name="HSeparator" type="HSeparator" parent="CenterContainer/Panel/VBox"]
+layout_mode = 2
+
+[node name="ContentVBox" type="VBoxContainer" parent="CenterContainer/Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="DescLabel" type="RichTextLabel" parent="CenterContainer/Panel/VBox/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+bbcode_enabled = true
+text = "[center][color=#ffd700]野蛮人·旋风小子[/color] 邀请你加入队伍。[/center]"
+fit_content = true
+scroll_active = false
+
+[node name="HintLabel" type="Label" parent="CenterContainer/Panel/VBox/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.72, 0.72, 0.72, 1)
+theme_override_font_sizes/font_size = 11
+text = "组队后同场景并肩作战将共享战斗经验与掉落加成。\n（不同难度英雄无法组队）"
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="TimerLabel" type="Label" parent="CenterContainer/Panel/VBox/ContentVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.65, 0.3, 1)
+theme_override_font_sizes/font_size = 11
+text = "（15 秒后自动关闭）"
+horizontal_alignment = 1
+
+[node name="BtnMargin" type="MarginContainer" parent="CenterContainer/Panel/VBox"]
+layout_mode = 2
+theme_override_constants/margin_top = 4
+
+[node name="BtnHBox" type="HBoxContainer" parent="CenterContainer/Panel/VBox/BtnMargin"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="BtnReject" type="Button" parent="CenterContainer/Panel/VBox/BtnMargin/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "拒绝 (15s)"
+
+[node name="BtnAccept" type="Button" parent="CenterContainer/Panel/VBox/BtnMargin/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 32)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 13
+theme_override_styles/normal = SubResource("StyleBoxFlat_btn_accept")
+text = "接受"

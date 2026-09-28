@@ -1,0 +1,254 @@
+[gd_scene load_steps=3 format=3 uid="uid://d3m8y2k1p7x9b"]
+
+[ext_resource type="Script" path="res://scripts/ui/inventory_controller.gd" id="1_controller"]
+[ext_resource type="Texture2D" path="res://assets/ui/inventory/inventory_bg.png" id="2_bg"]
+
+[node name="InventoryPanel" type="Control"]
+custom_minimum_size = Vector2(525, 780)
+layout_mode = 3
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -262.5
+offset_top = -390.0
+offset_right = 262.5
+offset_bottom = 390.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_controller")
+
+[node name="PanelContainer" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="PanelContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="PanelContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TopBar" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="PanelContainer/MarginContainer/VBox/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.9, 0.8, 0.5, 1)
+theme_override_font_sizes/font_size = 15
+text = "  ⚔️ 暗黑破坏神 · 装备与物品存储体系"
+
+[node name="BtnClose" type="Button" parent="PanelContainer/MarginContainer/VBox/TopBar"]
+custom_minimum_size = Vector2(32, 28)
+layout_mode = 2
+text = "✕"
+
+[node name="TabHBox" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BtnTabCharmBag" type="Button" parent="PanelContainer/MarginContainer/VBox/TabHBox"]
+custom_minimum_size = Vector2(240, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 13
+toggle_mode = true
+button_pressed = true
+text = "🎒 随身装备纸娃娃 (charm_bag)"
+
+[node name="BtnTabDropStash" type="Button" parent="PanelContainer/MarginContainer/VBox/TabHBox"]
+custom_minimum_size = Vector2(240, 34)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 13
+toggle_mode = true
+text = "📦 掉落战利品仓 (inventory)"
+
+[node name="ViewsStack" type="Control" parent="PanelContainer/MarginContainer/VBox"]
+custom_minimum_size = Vector2(509, 700)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CharmBagView" type="Control" parent="PanelContainer/MarginContainer/VBox/ViewsStack"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="BgTexture" type="TextureRect" parent="PanelContainer/MarginContainer/VBox/ViewsStack/CharmBagView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="PaperdollSlots" type="Control" parent="PanelContainer/MarginContainer/VBox/ViewsStack/CharmBagView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -200.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CharmsGrid" type="GridContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/CharmBagView"]
+layout_mode = 0
+offset_left = 10.0
+offset_top = 424.0
+offset_right = 500.0
+offset_bottom = 620.0
+theme_override_constants/h_separation = 1
+theme_override_constants/v_separation = 1
+columns = 10
+
+[node name="CharmLoadLabel" type="Label" parent="PanelContainer/MarginContainer/VBox/ViewsStack/CharmBagView"]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -24.0
+offset_right = -44.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.85, 0.75, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "随身护身符激活包负载: 0 / 40 格"
+horizontal_alignment = 2
+
+[node name="DropStashView" type="Control" parent="PanelContainer/MarginContainer/VBox/ViewsStack"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="StashDescLabel" type="RichTextLabel" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox"]
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+bbcode_enabled = true
+fit_content = true
+text = "[color=#e2e8f0]挂机掉落战利品存储仓库[/color]"
+
+[node name="FilterBar" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BtnSortStash" type="Button" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox/FilterBar"]
+custom_minimum_size = Vector2(76, 32)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
+theme_override_font_sizes/font_size = 12
+text = "✨ 整理"
+
+[node name="FilterScroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox/FilterBar"]
+custom_minimum_size = Vector2(0, 32)
+layout_mode = 2
+size_flags_horizontal = 3
+vertical_scroll_mode = 0
+
+[node name="FilterHBox" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox/FilterBar/FilterScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 6
+
+[node name="ItemsScroll" type="ScrollContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ItemsVBox" type="VBoxContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox/ItemsScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="PageHBox" type="HBoxContainer" parent="PanelContainer/MarginContainer/VBox/ViewsStack/DropStashView/VBox"]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="TooltipBox" type="PanelContainer" parent="."]
+visible = false
+custom_minimum_size = Vector2(260, 200)
+layout_mode = 0
+offset_left = -270.0
+offset_top = 80.0
+offset_right = -10.0
+offset_bottom = 360.0
+
+[node name="Margin" type="MarginContainer" parent="TooltipBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="TooltipBox/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="IconCenter" type="CenterContainer" parent="TooltipBox/Margin/VBox"]
+layout_mode = 2
+
+[node name="ItemLargeIcon" type="TextureRect" parent="TooltipBox/Margin/VBox/IconCenter"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="RichTextLabel" type="RichTextLabel" parent="TooltipBox/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+text = "[center]物品说明[/center]"
+
+[node name="HSeparator" type="HSeparator" parent="TooltipBox/Margin/VBox"]
+layout_mode = 2
+
+[node name="ActionHBox" type="HBoxContainer" parent="TooltipBox/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+alignment = 1
+
+[node name="BtnActionPrimary" type="Button" parent="TooltipBox/Margin/VBox/ActionHBox"]
+custom_minimum_size = Vector2(110, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "放入背包"
+
+[node name="BtnActionSecondary" type="Button" parent="TooltipBox/Margin/VBox/ActionHBox"]
+custom_minimum_size = Vector2(110, 32)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "穿戴 / 使用"

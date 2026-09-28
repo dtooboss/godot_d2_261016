@@ -1,0 +1,23 @@
+extends Control
+class_name AFK_Bar
+
+@onready var _bar: TextureProgressBar = %Bar
+@onready var _label: Label = %Label
+
+var cur_val: int = 80
+var max_val: int = 80
+
+func _ready() -> void:
+	update_display()
+
+func set_stat(cur: int, maximum: int) -> void:
+	cur_val = cur
+	max_val = max(1, maximum)
+	update_display()
+
+func update_display() -> void:
+	if not _bar or not _label:
+		return
+	var pct: int = int((float(cur_val) / float(max_val)) * 100.0)
+	_bar.value = pct
+	_label.text = "%d/%d(%d%%)" % [cur_val, max_val, pct]

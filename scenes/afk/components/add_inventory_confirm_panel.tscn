@@ -1,0 +1,137 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/add_inventory_confirm_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/panel_background_light.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/border_panel.tres" id="3"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="4"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="5"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/accept.tres" id="6"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_material"]
+bg_color = Color(0.12, 0.12, 0.14, 0.95)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.35, 0.35, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="AddInventoryConfirmPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Mask" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Card" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(240, 230)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -120.0
+offset_top = -115.0
+offset_right = 120.0
+offset_bottom = 115.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="Margin" type="MarginContainer" parent="Card"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Card/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TitleBar" type="PanelContainer" parent="Card/Margin/VBox"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("4")
+
+[node name="TitleLabel" type="Label" parent="Card/Margin/VBox/TitleBar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "扩展背包"
+horizontal_alignment = 1
+
+[node name="InfoBox" type="VBoxContainer" parent="Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CurrentLevelLabel" type="Label" parent="Card/Margin/VBox/InfoBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "当前背包数量: 1"
+horizontal_alignment = 1
+
+[node name="NextLevelLabel" type="Label" parent="Card/Margin/VBox/InfoBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "扩展后数量: 2"
+horizontal_alignment = 1
+
+[node name="ReqTitle" type="Label" parent="Card/Margin/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "所需材料"
+horizontal_alignment = 1
+
+[node name="MaterialPanel" type="PanelContainer" parent="Card/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_material")
+
+[node name="MatMargin" type="MarginContainer" parent="Card/Margin/VBox/MaterialPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="MaterialList" type="VBoxContainer" parent="Card/Margin/VBox/MaterialPanel/MatMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+
+[node name="BtnHBox" type="HBoxContainer" parent="Card/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="Card/Margin/VBox/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 26)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("5")
+text = "关闭"
+
+[node name="ConfirmButton" type="Button" parent="Card/Margin/VBox/BtnHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 26)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("6")
+text = "确定"

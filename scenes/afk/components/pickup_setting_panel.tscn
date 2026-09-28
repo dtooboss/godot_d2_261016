@@ -1,0 +1,232 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/pickup_setting_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/title_background_deep.tres" id="3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_pickup_bg"]
+bg_color = Color(0.12, 0.12, 0.14, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.35, 0.4, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.8)
+shadow_size = 10
+
+[node name="PickupSettingPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Backdrop" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.45)
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(440, 430)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -215.0
+offset_right = 220.0
+offset_bottom = 215.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_pickup_bg")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="TitleBar" type="PanelContainer" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 28)
+layout_mode = 2
+theme_override_styles/panel = ExtResource("3")
+
+[node name="HBox" type="HBoxContainer" parent="Panel/VBox/TitleBar"]
+layout_mode = 2
+
+[node name="Spacer" type="Control" parent="Panel/VBox/TitleBar/HBox"]
+custom_minimum_size = Vector2(10, 0)
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox/TitleBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 13
+text = "自动熔炼 / 过滤设置"
+
+[node name="BtnClose" type="Button" parent="Panel/VBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(26, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.3, 0.3, 1)
+theme_override_font_sizes/font_size = 12
+text = "X"
+flat = true
+
+[node name="SubTipMargin" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 12
+
+[node name="SubTipLabel" type="Label" parent="Panel/VBox/SubTipMargin"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.25, 1)
+theme_override_font_sizes/font_size = 11
+text = "⚡ 勾选的项目击杀时自动熔炼为金币/魔尘；未勾选的项目拾取入包"
+horizontal_alignment = 2
+
+[node name="TabMargin" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 10
+
+[node name="TabContainer" type="TabContainer" parent="Panel/VBox/TabMargin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+current_tab = 0
+
+[node name="EquipTab" type="ScrollContainer" parent="Panel/VBox/TabMargin/TabContainer"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel/VBox/TabMargin/TabContainer/EquipTab"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="RowsContainer" type="VBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/EquipTab/Margin"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="MiscTab" type="ScrollContainer" parent="Panel/VBox/TabMargin/TabContainer"]
+visible = false
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Panel/VBox/TabMargin/TabContainer/MiscTab"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+
+[node name="OtherVBox" type="VBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ChkMaterial" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.6, 0.35, 1)
+theme_override_font_sizes/font_size = 12
+text = "强化材料 (魔尘、金沙等自动拾取)"
+
+[node name="ChkKey" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 12
+text = "宝箱钥匙拾取"
+
+[node name="ChkJewel" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+text = "宝石 / 符文自动拾取入包"
+
+[node name="ChkSkill" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.4, 0.85, 1)
+theme_override_font_sizes/font_size = 12
+text = "技能书 / 卷轴拾取"
+
+[node name="HSeparator" type="HSeparator" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+layout_mode = 2
+
+[node name="ChkConfirmUnique" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.75, 0.25, 1)
+theme_override_font_sizes/font_size = 12
+button_pressed = true
+text = "🛡️ 暗金装备分解二次确认 (防止手滑毁号)"
+
+[node name="ChkKeepSockets" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/MiscTab/Margin/OtherVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 12
+button_pressed = true
+text = "🛡️ 极品底材保护 (天然带孔/超强/无形底材永久豁免分解)"
+
+[node name="FooterBar" type="MarginContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="HBox" type="HBoxContainer" parent="Panel/VBox/FooterBar"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="BtnPresetSafe" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "开荒全留"
+
+[node name="BtnPresetFarm" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "进阶挂机"
+
+[node name="BtnPresetSpeed" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(70, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "极速神装"
+
+[node name="Spacer" type="Control" parent="Panel/VBox/FooterBar/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BtnSave" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 26)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "保存"

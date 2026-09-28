@@ -1,0 +1,831 @@
+extends Control
+
+## 暗黑破坏神2 主城安全区大本营控制器 (TownHubController)
+## 全面支持 Act 1 ~ Act 5 进度自适应进驻、纯战网集结社交、同室英雄列表、同难度组队、交易、聊天与排行榜
+
+# 顶部导航
+@onready var lbl_room_title: RichTextLabel = $TopBar/HBox/RoomTitleLabel
+@onready var lbl_char_name: Label = $TopBar/HBox/CharInfoBox/CharNameLabel
+@onready var lbl_char_class: Label = $TopBar/HBox/CharInfoBox/CharClassLabel
+@onready var lbl_gold: Label = $TopBar/HBox/ResourceBox/GoldLabel
+@onready var avatar_icon: TextureRect = $TopBar/HBox/AvatarRect
+@onready var btn_top_rank: Button = $TopBar/HBox/ResourceBox/BtnTopRank
+@onready var btn_top_exit: Button = $TopBar/HBox/ResourceBox/BtnTopExit
+
+# 中央大本营与出征
+@onready var camp_title: Label = $MainLayout/LeftArea/CampHub/VBox/CampTitle
+@onready var camp_desc: Label = $MainLayout/LeftArea/CampHub/VBox/CampDesc
+@onready var btn_go_battle: Button = $MainLayout/LeftArea/CampHub/VBox/BtnGoBattle
+@onready var btn_stash: Button = $MainLayout/LeftArea/CampHub/VBox/FacilityHBox/BtnStash
+@onready var btn_waypoint: Button = $MainLayout/LeftArea/CampHub/VBox/FacilityHBox/BtnWaypoint
+@onready var btn_cube: Button = $MainLayout/LeftArea/CampHub/VBox/FacilityHBox/BtnCube
+
+# 聊天系统 (三频道：世界/队伍/交易)
+@onready var chat_log: RichTextLabel = $MainLayout/LeftArea/ChatPanel/VBox/ChatLog
+@onready var channel_select: OptionButton = $MainLayout/LeftArea/ChatPanel/VBox/HBox/ChannelSelect
+@onready var chat_input: LineEdit = $MainLayout/LeftArea/ChatPanel/VBox/HBox/ChatInput
+@onready var btn_chat_send: Button = $MainLayout/LeftArea/ChatPanel/VBox/HBox/BtnChatSend
+
+var attached_item: Dictionary = {} # 当前拖入/附带展示的装备元数据
+
+const CHANNEL_CMDS = {
+	0: "chat", # 世界 (走 channeld 闲聊频道)
+	1: "tt",   # 队伍 (走 team talk)
+	2: "bill"  # 交易 (走 channeld 交易频道)
+}
+
+# 右侧同场景英雄集结榜 (带滑动与难度过滤)
+@onready var lbl_player_count: Label = $MainLayout/RightSidebar/VBox/HeaderBox/PlayerCountLabel
+@onready var btn_filter_all: Button = $MainLayout/RightSidebar/VBox/FilterHBox/BtnFilterAll
+@onready var btn_filter_normal: Button = $MainLayout/RightSidebar/VBox/FilterHBox/BtnFilterNormal
+@onready var btn_filter_nm: Button = $MainLayout/RightSidebar/VBox/FilterHBox/BtnFilterNm
+@onready var btn_filter_hell: Button = $MainLayout/RightSidebar/VBox/FilterHBox/BtnFilterHell
+@onready var player_scroll: ScrollContainer = $MainLayout/RightSidebar/VBox/PlayerScroll
+@onready var player_list_vbox: VBoxContainer = $MainLayout/RightSidebar/VBox/PlayerScroll/PlayerListVBox
+
+# 底部全局快捷菜单
+@onready var btn_bottom_bag: Button = $BottomMenuBar/HBox/BtnBag
+@onready var btn_bottom_char: Button = $BottomMenuBar/HBox/BtnChar
+@onready var btn_bottom_skill: Button = $BottomMenuBar/HBox/BtnSkill
+@onready var btn_bottom_cube: Button = $BottomMenuBar/HBox/BtnCube
+@onready var btn_bottom_map: Button = $BottomMenuBar/HBox/BtnMap
+@onready var btn_bottom_battle: Button = $BottomMenuBar/HBox/BtnBattle
+
+# 弹窗与视窗
+@onready var inventory_panel: AFK_PlayerInventoryPanel = $InventoryPanel
+@onready var toast_label: Label = $ToastLabel
+@onready var bg_rect: ColorRect = $Background
+@onready var leaderboard_modal: Control = $LeaderboardModal
+@onready var btn_close_rank: Button = $LeaderboardModal/CenterContainer/Panel/VBox/BtnCloseRank
+@onready var rank_list_vbox: VBoxContainer = $LeaderboardModal/CenterContainer/Panel/VBox/Scroll/RankListVBox
+@onready var item_tooltip: AFK_ItemTooltip = $ItemTooltip
+@onready var team_invite_dialog: Control = get_node_or_null("TeamInviteDialog")
+
+# 城镇主题自适应
+const ACT_THEMES = {
+	"act1": {
+		"name": "罗格营地",
+		"title": "罗格姐妹会营地 · 安全要塞",
+		"desc": "几顶帐篷在寒风中稳固伫立，中央流转着幽蓝色的传送阵符文。篝火散发着温暖的光芒，这里是进军鲜血荒野的桥头堡。",
+		"bg": Color(0.045, 0.04, 0.03),
+		"exit_name": "鲜血荒地",
+		"exit_cmd": "north"
+	},
+	"act2": {
+		"name": "鲁高因",
+		"title": "沙漠明珠 · 鲁高因港口",
+		"desc": "烈日高悬，干燥的微风吹拂着由砂岩砌成的宏伟圆顶建筑与繁忙的商船码头。向东出城即是无垠的碎石荒野与远古法师要塞。",
+		"bg": Color(0.07, 0.055, 0.03),
+		"exit_name": "碎石荒地",
+		"exit_cmd": "east"
+	},
+	"act3": {
+		"name": "库拉斯特",
+		"title": "雨林港口 · 库拉斯特海港",
+		"desc": "被墨菲斯托黑暗侵蚀的热带密林边缘，古老的海港在潮湿迷雾中固守着最后的净土。",
+		"bg": Color(0.03, 0.05, 0.035),
+		"exit_name": "蜘蛛森林",
+		"exit_cmd": "north"
+	},
+	"act4": {
+		"name": "群魔堡垒",
+		"title": "天堂前哨 · 群魔堡垒",
+		"desc": "矗立在地狱裂隙之上的孤傲石砌要塞，大天使泰瑞尔炽热的金光在此守望着混沌凡间。",
+		"bg": Color(0.06, 0.03, 0.03),
+		"exit_name": "外侧草原",
+		"exit_cmd": "north"
+	},
+	"act5": {
+		"name": "哈洛加斯",
+		"title": "圣山重镇 · 哈洛加斯要塞",
+		"desc": "亚瑞特圣山脚下的野蛮人永冬要塞，战鼓与寒风咆哮，抵御着巴尔毁灭军团的狂潮。",
+		"bg": Color(0.035, 0.045, 0.06),
+		"exit_name": "血腥丘陵",
+		"exit_cmd": "north"
+	}
+}
+
+var current_act_key: String = "act1"
+var current_room_name: String = "罗格营地"
+var current_player_diff: String = "normal" # 玩家当前难度
+var selected_diff_filter: String = "all" # 英雄列表难度筛选: all, normal, nm, hell
+var room_players: Array = [] # 当前场景的所有在线英雄列表
+var gold_amount: int = 0
+
+func _ready() -> void:
+	_init_player_ui()
+	_connect_signals()
+	_update_town_display("罗格营地")
+	
+	# 回放全局公频聊天历史 (保证从战斗切回大本营时不丢消息)
+	if chat_log:
+		for hist_msg in GameState.chat_history:
+			_append_chat(hist_msg, "", false)
+	
+	# 向 LPC 请求刷新当前房间全量数据
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("look")
+		NetworkClient.send_raw("hp1")
+	_show_toast("已进驻安全大本营！这里可自由组队、交易与聊天")
+
+func _init_player_ui() -> void:
+	var cdata = GameState.selected_character
+	if not cdata.is_empty():
+		var cname = str(cdata.get("name", "英雄"))
+		var cls = str(cdata.get("class", "sor"))
+		var cls_name = str(cdata.get("class_name", GameState.get_class_display_name(cls)))
+		var level = int(cdata.get("level", 1))
+		
+		# 难度判定
+		var raw_diff = str(cdata.get("difficulty", GameState.selected_difficulty)).to_lower()
+		current_player_diff = parse_difficulty_code(raw_diff)
+		
+		lbl_char_name.text = cname
+		lbl_char_class.text = "Lv.%d %s" % [level, cls_name]
+		avatar_icon.texture = get_hero_avatar_icon(cls)
+		
+		gold_amount = int(cdata.get("gold", 0))
+		lbl_gold.text = "🪙 金币: %d" % gold_amount
+
+func _connect_signals() -> void:
+	# 出征与大本营设施
+	btn_go_battle.pressed.connect(_on_enter_battle_pressed)
+	btn_stash.pressed.connect(func(): NetworkClient.send_raw("open stash"))
+	btn_waypoint.pressed.connect(func(): NetworkClient.send_raw("waypoint"))
+	btn_cube.pressed.connect(func(): NetworkClient.send_raw("gcube"))
+	
+	# 聊天输入与超链接点击
+	chat_input.text_submitted.connect(_on_chat_submitted)
+	btn_chat_send.pressed.connect(func(): _on_chat_submitted(chat_input.text))
+	chat_log.meta_clicked.connect(_on_chat_meta_clicked)
+	if chat_input.has_signal("item_dropped"):
+		chat_input.item_dropped.connect(_insert_item_to_chat)
+	
+	# 难度过滤标签
+	btn_filter_all.pressed.connect(func(): _set_diff_filter("all"))
+	btn_filter_normal.pressed.connect(func(): _set_diff_filter("normal"))
+	btn_filter_nm.pressed.connect(func(): _set_diff_filter("nm"))
+	btn_filter_hell.pressed.connect(func(): _set_diff_filter("hell"))
+	
+	# 底部与顶部快捷栏
+	btn_top_rank.pressed.connect(_open_leaderboard)
+	btn_close_rank.pressed.connect(_close_leaderboard)
+	btn_top_exit.pressed.connect(_on_exit_to_login)
+	
+	# 背包体系 (gbag 驱动)
+	if inventory_panel:
+		inventory_panel.visible = false
+		inventory_panel.item_hovered.connect(func(item_data, pos):
+			if item_tooltip:
+				item_tooltip.show_item(item_data, pos)
+		)
+		inventory_panel.item_unhovered.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
+		
+	btn_bottom_bag.pressed.connect(_toggle_inventory)
+	btn_bottom_battle.pressed.connect(_on_enter_battle_pressed)
+	btn_bottom_char.pressed.connect(func(): NetworkClient.send_raw("score"))
+	btn_bottom_skill.pressed.connect(func(): NetworkClient.send_raw("skills"))
+	btn_bottom_cube.pressed.connect(func(): NetworkClient.send_raw("gcube"))
+	btn_bottom_map.pressed.connect(func(): NetworkClient.send_raw("worldmap"))
+	
+	# 网络帧监听
+	NetworkClient.json_frame_received.connect(_on_json_frame_received)
+	NetworkClient.text_received.connect(_on_text_received)
+
+## 开关背包 (完全由 LPC gbag 协议驱动)
+func _toggle_inventory() -> void:
+	if not inventory_panel: return
+	inventory_panel.visible = not inventory_panel.visible
+	if inventory_panel.visible:
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("gbag %d" % inventory_panel.current_page)
+	else:
+		if item_tooltip:
+			item_tooltip.hide_tooltip()
+
+## 处理服务端推送的各类数据包
+func _on_json_frame_received(type: String, data: Variant) -> void:
+	# 1. 房间标题 (罗格营地 / 鲁高因 等)
+	if type == "title":
+		var raw_title = ""
+		if data is Dictionary:
+			raw_title = str(data.get("name", ""))
+		elif data is String:
+			raw_title = data
+		_update_town_act(raw_title)
+		
+	# 2. 房间内的出口与同场景英雄列表 (LPC 在 exits 帧下发 type == "hero" 的真实玩家)
+	elif type == "exits":
+		if data is Array:
+			_parse_room_players(data)
+			
+	# 3. 房间内的对象列表 (对齐Flutter：绝不直接覆盖清空英雄列表)
+	elif type == "objects":
+		if data is Array:
+			var has_any_hero = false
+			for it in data:
+				if it is Dictionary and str(it.get("type", "")) == "hero":
+					has_any_hero = true
+					break
+			if has_any_hero:
+				_parse_room_players(data)
+				
+	# 3.5 实时增量进出监听 (当其他玩家登录进房或出征离开时，自动刷新房间英雄)
+	elif type == "object" or type == "object_remove":
+		if NetworkClient.is_connected:
+			_request_refresh_room()
+			
+	# 4. 角色血量/金币
+	elif type == "status" or type == "charhp":
+		if data is Dictionary:
+			if data.has("gold"):
+				gold_amount = int(data["gold"])
+				lbl_gold.text = "🪙 金币: %d" % gold_amount
+				if inventory_panel and inventory_panel.has_method("update_gold"):
+					inventory_panel.update_gold(gold_amount)
+					
+	# 5. LPC 专属背包帧 (gbag: 84格/页, 30页动态扩展, 护身符口袋)
+	elif type == "gbag" and data is Dictionary:
+		var items_list = data.get("items", [])
+		var charm_used = int(data.get("charm_used_slots", -1))
+		var charm_max = int(data.get("charm_max_slots", 40))
+		var total_pages = int(data.get("pages", 1))
+		var cur_page = int(data.get("page", data.get("current_page", 1)))
+		if inventory_panel:
+			inventory_panel.render_lpc_items(items_list, charm_used, charm_max, total_pages, cur_page, data)
+
+	# 6. LPC 专属频道广播帧 (channel: chat/bill/rumor 等，解决真实联机下聊天视窗空空如也的根因)
+	elif type == "channel":
+		var channel_text = ""
+		if data is Dictionary:
+			channel_text = str(data.get("text", data.get("msg", "")))
+		elif data is String:
+			channel_text = data
+		if not channel_text.is_empty():
+			_on_text_received(channel_text)
+
+	# 7. LPC 普通文本/富文本/系统反馈帧 (text: 队伍聊天/系统提示/操作报错)
+	elif type == "text":
+		var plain_or_ansi = ""
+		if data is String:
+			plain_or_ansi = data
+		elif data is Dictionary:
+			plain_or_ansi = str(data.get("text", data.get("msg", "")))
+		if not plain_or_ansi.is_empty():
+			_on_text_received(plain_or_ansi)
+
+	# 8. LPC 复合交互面板帧 (panel: 组队邀请、NPC交互选项、装备词缀卡片)
+	elif type == "panel" and data is Dictionary:
+		_handle_panel_frame(data)
+
+	# 9. LPC 专属组队更新帧 (team: 队长与队员实时列表及血量)
+	elif type == "team" and data is Dictionary:
+		var leader_id = str(data.get("leader", ""))
+		var raw_m = data.get("members", [])
+		var members: Array = raw_m if raw_m is Array else []
+		GameState.update_team_data(leader_id, members)
+		_render_player_cards() # 重新渲染英雄列表以标记队员徽章与置顶
+
+	# 10. LPC 线性推关进场帧 (stage_enter: 队长带队出征，队员自动协同进入野外战斗)
+	elif type == "stage_enter" and data is Dictionary:
+		GameState.current_stage_info = data
+		var s_name = str(data.get("name", "挂机副本"))
+		_show_toast("队长已带领全队踏入【%s】，全队集结出征！" % s_name)
+		await get_tree().create_timer(0.2).timeout
+		get_tree().change_scene_to_file("res://scenes/afk/afk_main_hud.tscn")
+
+## 处理服务端推送的交互面板帧 (组队邀请、操作确认等)
+func _handle_panel_frame(data: Dictionary) -> void:
+	var desc = str(data.get("desc", ""))
+	var raw_actions = data.get("actions", [])
+	var actions: Array = raw_actions if raw_actions is Array else []
+	
+	# 判定是否为组队邀请
+	var is_team_invite = false
+	var accept_cmd = ""
+	var reject_cmd = "look"
+	
+	var clean_desc = AnsiHelper.to_plain_text(desc)
+	if "邀请你加入" in clean_desc or "组队" in clean_desc:
+		is_team_invite = true
+		
+	for act in actions:
+		if act is Dictionary:
+			var cmd = str(act.get("cmd", ""))
+			var raw_lbl = str(act.get("label", act.get("name", "")))
+			var clean_lbl = AnsiHelper.to_plain_text(raw_lbl).strip_edges()
+			
+			if cmd.begins_with("team with "):
+				is_team_invite = true
+				accept_cmd = cmd
+			elif clean_lbl == "接受" and accept_cmd.is_empty():
+				accept_cmd = cmd
+			elif clean_lbl == "拒绝":
+				reject_cmd = cmd
+				
+	if is_team_invite and not accept_cmd.is_empty():
+		if team_invite_dialog:
+			team_invite_dialog.show_invite(desc, accept_cmd, reject_cmd)
+		return
+		
+	# 装备词缀展示兜底 (若 item_tooltip 处于开启状态且面板非组队，转交 tooltip 原地刷新)
+	if item_tooltip and item_tooltip.visible:
+		item_tooltip._on_network_json("panel", data)
+
+func _on_text_received(text: String) -> void:
+	var clean = AnsiHelper.to_plain_text(text).strip_edges()
+	if clean.is_empty(): return
+	
+	# 排行榜文本包处理
+	if "排行榜" in clean or "天下前" in clean or "武林" in clean:
+		_render_leaderboard_text(text)
+		return
+		
+	# 频道与聊天消息分流展示 (世界/队伍/交易/组队提示)
+	if "『闲聊』" in clean or "闲聊" in clean:
+		# LPC 闲聊频道即世界公频
+		var raw_replaced = text.replace("闲聊", "世界")
+		_append_chat(AnsiHelper.to_bbcode(raw_replaced), clean.replace("闲聊", "世界"))
+	elif "『交易』" in clean:
+		_append_chat(AnsiHelper.to_bbcode(text), clean)
+	elif "【队伍】" in clean or "『队伍』" in clean:
+		_append_chat(AnsiHelper.to_bbcode(text), clean)
+	elif "『" in clean or "【" in clean or "说：" in clean or "告诉" in clean or "队伍" in clean:
+		_append_chat(AnsiHelper.to_bbcode(text), clean)
+	elif "加入队伍" in clean or "解散队伍" in clean or "组队" in clean:
+		_append_chat("[color=#ffd700]" + clean + "[/color]", clean)
+		_show_toast(clean)
+	elif "队长带领全队踏入" in clean or "专属挂机位面" in clean:
+		_append_chat("[color=#38bdf8]⚔ " + clean + "[/color]", clean)
+		_show_toast("队长已带队出征！正在跟随进入战斗位面...")
+		await get_tree().create_timer(0.2).timeout
+		get_tree().change_scene_to_file("res://scenes/afk/afk_main_hud.tscn")
+	elif "你现在并没有和别人组成队伍" in clean or "不要在短期内使用频道发布重复的信息" in clean or "你必须在注册以后才能够使用" in clean or "你还没出生" in clean or "一句话说这么长" in clean:
+		_append_chat("[color=#fbbf24]⚠️ " + clean + "[/color]", clean)
+		_show_toast(clean)
+
+## 城镇章节自适应
+func _update_town_act(raw_title: String) -> void:
+	var plain_name = AnsiHelper.to_plain_text(raw_title)
+	if plain_name.is_empty(): plain_name = "罗格营地"
+	_update_town_display(plain_name)
+
+func _update_town_display(plain_name: String) -> void:
+	current_room_name = plain_name
+	
+	for act_key in ACT_THEMES:
+		var act_info = ACT_THEMES[act_key]
+		if act_info.name in current_room_name:
+			current_act_key = act_key
+			bg_rect.color = act_info.bg
+			camp_title.text = act_info.title
+			camp_desc.text = act_info.desc
+			lbl_room_title.text = "[center]【 [color=#4ade80]%s[/color] (安全区) 】[/center]" % act_info.name
+			btn_go_battle.text = "⚔️ 出征野外挂机战斗 (前往 %s)" % act_info.exit_name
+			break
+
+var _last_room_refresh_time: int = 0
+func _request_refresh_room() -> void:
+	var now = Time.get_ticks_msec()
+	if now - _last_room_refresh_time > 300:
+		_last_room_refresh_time = now
+		NetworkClient.send_raw("look")
+
+## 解析同室玩家数据 (第一性原理：提取 hero 类型对象，杜绝储物箱等设施被误当玩家)
+func _parse_room_players(objects_list: Array) -> void:
+	room_players.clear()
+	var my_name = lbl_char_name.text.strip_edges()
+	
+	for obj in objects_list:
+		if not obj is Dictionary: continue
+		var raw_name = str(obj.get("name", ""))
+		var clean_name = AnsiHelper.to_plain_text(raw_name)
+		var ocmd = str(obj.get("cmd", ""))
+		var rank = str(obj.get("rank", "normal"))
+		var o_type = str(obj.get("type", "")).to_lower()
+		
+		# 1. 严格过滤非英雄对象：储物箱、传送小站、告示牌、魔盒、NPC等场景设施
+		var is_facility = "箱" in clean_name or "小站" in clean_name or "stash" in ocmd or "waypoint" in ocmd or "cube" in ocmd or "牌" in clean_name or "石" in clean_name
+		if is_facility or "npc" in ocmd or rank == "npc" or o_type == "npc":
+			continue
+			
+		# 2. 必须具备英雄标志：明确的 type == "hero" / "player"，或者包含有效的职业/等级属性
+		var has_hero_type = (o_type == "hero" or o_type == "player")
+		var has_hero_props = (obj.has("class") or obj.has("d2_class") or obj.has("rating"))
+		if not has_hero_type and not has_hero_props:
+			continue
+			
+		# 提取英雄属性 (支持显式 class 与从 icon 反推职业)
+		var p_id = str(obj.get("id", clean_name)).to_lower()
+		var p_cls = str(obj.get("class", obj.get("d2_class", ""))).to_lower()
+		var p_icon = str(obj.get("icon", "")).to_lower()
+		if p_cls.is_empty() or p_cls == "null":
+			if "sorceress" in p_icon or "sor" in p_icon: p_cls = "sor"
+			elif "paladin" in p_icon or "pal" in p_icon: p_cls = "pal"
+			elif "necromancer" in p_icon or "nec" in p_icon: p_cls = "nec"
+			elif "amazon" in p_icon or "ama" in p_icon: p_cls = "ama"
+			elif "druid" in p_icon or "dru" in p_icon: p_cls = "dru"
+			elif "assassin" in p_icon or "asn" in p_icon: p_cls = "asn"
+			else: p_cls = "bar"
+		var p_lvl = int(obj.get("level", 1))
+		var p_rating = str(obj.get("rating", "1.0k"))
+		var raw_diff = str(obj.get("diff", obj.get("difficulty", "normal"))).to_lower()
+		var p_diff = parse_difficulty_code(raw_diff)
+		
+		# 若名字自带 ANSI 难度色彩，也可辅以解析
+		if p_diff == "normal":
+			var esc = char(27)
+			if (esc + "[1;31m") in raw_name or (esc + "[31m") in raw_name:
+				p_diff = "hell"
+			elif (esc + "[1;33m") in raw_name or (esc + "[33m") in raw_name:
+				p_diff = "nm"
+				
+		room_players.append({
+			"id": p_id,
+			"name": clean_name,
+			"class": p_cls,
+			"level": p_lvl,
+			"rating": p_rating,
+			"diff": p_diff,
+			"cmd": ocmd,
+			"is_self": (clean_name == my_name)
+		})
+		
+	_render_player_cards()
+
+## 设置难度过滤
+func _set_diff_filter(filter: String) -> void:
+	selected_diff_filter = filter
+	
+	btn_filter_all.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if filter == "all" else Color(0.7, 0.7, 0.7))
+	btn_filter_normal.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if filter == "normal" else Color(0.7, 0.7, 0.7))
+	btn_filter_nm.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if filter == "nm" else Color(0.7, 0.7, 0.7))
+	btn_filter_hell.add_theme_color_override("font_color", Color(1, 0.85, 0.4) if filter == "hell" else Color(0.7, 0.7, 0.7))
+	
+	_render_player_cards()
+
+## 渲染同场景英雄长列表 (带滑动条)
+func _render_player_cards() -> void:
+	for c in player_list_vbox.get_children():
+		c.queue_free()
+		
+	var displayed_count = 0
+	
+	for p in room_players:
+		var p_diff = p["diff"]
+		if selected_diff_filter != "all" and p_diff != selected_diff_filter:
+			continue
+			
+		displayed_count += 1
+		var card = _create_hero_card(p)
+		player_list_vbox.add_child(card)
+		
+	lbl_player_count.text = "营地英雄 (%d 人)" % room_players.size()
+	
+	if displayed_count == 0:
+		var empty_lbl = Label.new()
+		empty_lbl.text = "当前筛选下无其他在线英雄"
+		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6, 0.8))
+		empty_lbl.add_theme_font_size_override("font_size", 12)
+		player_list_vbox.add_child(empty_lbl)
+
+## 创建单个玩家的精致卡片
+func _create_hero_card(p: Dictionary) -> PanelContainer:
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 52)
+	
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 8)
+	card.add_child(hbox)
+	
+	# 1. 职业专属头像
+	var avatar = TextureRect.new()
+	avatar.custom_minimum_size = Vector2(38, 38)
+	avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	avatar.texture = get_hero_avatar_icon(p["class"])
+	hbox.add_child(avatar)
+	
+	# 2. 玩家信息 (名字、等级、战力、难度)
+	var vbox_info = VBoxContainer.new()
+	vbox_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox_info.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_child(vbox_info)
+	
+	# 第 1 行：名字与等级
+	var row1 = HBoxContainer.new()
+	row1.add_theme_constant_override("separation", 6)
+	vbox_info.add_child(row1)
+	
+	var name_lbl = Label.new()
+	name_lbl.text = p["name"] + (" (你)" if p["is_self"] else "")
+	name_lbl.add_theme_font_size_override("font_size", 13)
+	name_lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.55) if p["is_self"] else Color(0.9, 0.9, 0.9))
+	row1.add_child(name_lbl)
+	
+	var lvl_lbl = Label.new()
+	lvl_lbl.text = "Lv.%d" % p["level"]
+	lvl_lbl.add_theme_font_size_override("font_size", 11)
+	lvl_lbl.add_theme_color_override("font_color", Color(0.35, 0.85, 0.55))
+	row1.add_child(lvl_lbl)
+	
+	# 第 2 行：战力徽章与难度标签
+	var row2 = HBoxContainer.new()
+	row2.add_theme_constant_override("separation", 8)
+	vbox_info.add_child(row2)
+	
+	var rating_lbl = Label.new()
+	rating_lbl.text = "⚔ " + str(p["rating"])
+	rating_lbl.add_theme_font_size_override("font_size", 11)
+	rating_lbl.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2)) # 暗金
+	row2.add_child(rating_lbl)
+	
+	var diff_info = get_difficulty_display(p["diff"])
+	var diff_lbl = Label.new()
+	diff_lbl.text = diff_info["label"]
+	diff_lbl.add_theme_font_size_override("font_size", 11)
+	diff_lbl.add_theme_color_override("font_color", diff_info["color"])
+	row2.add_child(diff_lbl)
+	
+	# 3. 交互按钮组 (组队、交易、私聊)
+	if not p["is_self"]:
+		var btn_box = HBoxContainer.new()
+		btn_box.add_theme_constant_override("separation", 4)
+		btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
+		hbox.add_child(btn_box)
+		
+		# 组队按钮状态 (同难度可点；若已为队友则队长显示踢出，队员显示已入队)
+		var is_same_diff = (p["diff"] == current_player_diff)
+		var is_teammate = false
+		for tm in GameState.current_team_members:
+			if tm is Dictionary and str(tm.get("id", "")) == p["id"]:
+				is_teammate = true
+				break
+				
+		var btn_team = Button.new()
+		btn_team.custom_minimum_size = Vector2(46, 26)
+		
+		if is_teammate:
+			if GameState.is_team_leader():
+				btn_team.text = "踢出"
+				btn_team.add_theme_color_override("font_color", Color(0.95, 0.4, 0.4))
+				btn_team.pressed.connect(func():
+					_show_toast("已将【%s】移出队伍" % p["name"])
+					NetworkClient.send_raw("team dismiss " + p["id"])
+				)
+			else:
+				btn_team.text = "已入队"
+				btn_team.disabled = true
+				btn_team.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
+		else:
+			btn_team.text = "组队"
+			btn_team.disabled = not is_same_diff
+			if not is_same_diff:
+				btn_team.tooltip_text = "不同难度英雄不可组队"
+			btn_team.pressed.connect(func():
+				_show_toast("已向【%s】发起组队邀请！" % p["name"])
+				NetworkClient.send_raw("team with " + p["id"])
+			)
+		btn_box.add_child(btn_team)
+		
+		# 交易按钮
+		var btn_trade = Button.new()
+		btn_trade.text = "交易"
+		btn_trade.custom_minimum_size = Vector2(46, 26)
+		btn_trade.pressed.connect(func():
+			_show_toast("发起交易需双方并肩作战累计交易点！")
+			NetworkClient.send_raw("trade " + p["id"])
+		)
+		btn_box.add_child(btn_trade)
+		
+		# 私聊按钮
+		var btn_tell = Button.new()
+		btn_tell.text = "私聊"
+		btn_tell.custom_minimum_size = Vector2(46, 26)
+		btn_tell.pressed.connect(func():
+			chat_input.text = "/tell %s " % p["id"]
+			chat_input.grab_focus()
+			chat_input.caret_column = chat_input.text.length()
+		)
+		btn_box.add_child(btn_tell)
+		
+	return card
+
+## 将装备插入聊天输入框 (支持拖入与 Shift+点击)
+func _insert_item_to_chat(item_data: Dictionary) -> void:
+	var raw_name = str(item_data.get("name", "装备"))
+	var clean_name = AnsiHelper.to_plain_text(raw_name).strip_edges()
+	var fid = str(item_data.get("file_id", item_data.get("id", "")))
+	if fid.is_empty(): return
+	
+	var tag = "【%s】" % clean_name
+	attached_item = {
+		"file_id": fid,
+		"name": clean_name,
+		"tag": tag
+	}
+	
+	# 在当前光标位置（或末尾）插入占位文字
+	var col = chat_input.caret_column
+	var cur_text = chat_input.text
+	var before = cur_text.substr(0, col)
+	var after = cur_text.substr(col)
+	
+	chat_input.text = before + tag + " " + after
+	chat_input.grab_focus()
+	chat_input.caret_column = (before + tag + " ").length()
+
+## 聊天提交处理 (三频道：世界/队伍/交易 + 图文一体装备展示)
+func _on_chat_submitted(text: String) -> void:
+	var msg = text.strip_edges()
+	if msg.is_empty(): return
+	
+	# 检查是否附带拖入/点击的装备
+	if not attached_item.is_empty() and attached_item.get("tag", "") in msg:
+		var fid = attached_item.get("file_id", "")
+		NetworkClient.send_raw("gshowitem %s %s" % [fid, msg])
+		attached_item.clear()
+	elif msg.begins_with("/tell ") or msg.begins_with("/t "):
+		NetworkClient.send_raw(msg.replace("/", ""))
+	elif msg.begins_with("/show ") or msg.begins_with("gshowitem ") or msg.begins_with("showitem "):
+		NetworkClient.send_raw(msg.replace("/", ""))
+	else:
+		var ch_idx = channel_select.selected if channel_select else 0
+		var cmd_prefix = CHANNEL_CMDS.get(ch_idx, "chat")
+		NetworkClient.send_raw("%s %s" % [cmd_prefix, msg])
+		
+	chat_input.text = ""
+
+func _append_chat(bbcode_text: String, clean_snippet: String = "", record_to_global: bool = true) -> void:
+	chat_log.append_text(bbcode_text + "\n")
+	if record_to_global:
+		GameState.add_chat_message(bbcode_text, clean_snippet)
+
+## 点击公频聊天中的装备超链接
+func _on_chat_meta_clicked(meta: Variant) -> void:
+	var meta_str = str(meta).strip_edges()
+	if meta_str.begins_with("item:"):
+		var file_id = meta_str.substr(5)
+		_inspect_chat_item(file_id)
+	elif meta_str.begins_with("cmds:"):
+		var cmd = meta_str.substr(5)
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw(cmd)
+
+## 跨空间查看装备高保真暗黑2悬浮卡片
+func _inspect_chat_item(file_id: String) -> void:
+	if item_tooltip:
+		var mouse_pos = get_viewport().get_mouse_position()
+		# 优先基于已有协议发起查询
+		item_tooltip.show_item({ "file_id": file_id, "cmd": "glookitem " + file_id }, mouse_pos)
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("glookitem " + file_id)
+
+func _unhandled_input(event: InputEvent) -> void:
+	# 1. 焦点阻断：当玩家在输入框打字时，彻底屏蔽所有游戏操作热键（B/I/C/P/T等）
+	var focus_owner = get_viewport().gui_get_focus_owner()
+	if focus_owner is LineEdit or focus_owner is TextEdit:
+		if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+			focus_owner.release_focus()
+			get_viewport().set_input_as_handled()
+		return
+		
+	# 2. 键盘热键映射（仅在非打字状态下触发）
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_B or event.keycode == KEY_I:
+			get_viewport().set_input_as_handled()
+			_toggle_inventory()
+			return
+		elif event.keycode == KEY_ESCAPE:
+			if leaderboard_modal and leaderboard_modal.visible:
+				leaderboard_modal.visible = false
+				get_viewport().set_input_as_handled()
+				return
+			if inventory_panel and inventory_panel.visible:
+				inventory_panel.visible = false
+				get_viewport().set_input_as_handled()
+				return
+			if item_tooltip and item_tooltip.visible:
+				item_tooltip.hide_tooltip()
+				get_viewport().set_input_as_handled()
+				return
+		elif event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+			# 回车快速激活聊天框
+			chat_input.grab_focus()
+			get_viewport().set_input_as_handled()
+			return
+
+	# 3. 鼠标空白处点击隐藏 Tooltip
+	if event is InputEventMouseButton and event.pressed:
+		if item_tooltip and item_tooltip.visible:
+			var local_pos = item_tooltip.get_local_mouse_position()
+			if not Rect2(Vector2.ZERO, item_tooltip.size).has_point(local_pos):
+				item_tooltip.hide_tooltip()
+
+## 出征野外挂机战斗 (无缝切换至 afk_main_hud)
+func _on_enter_battle_pressed() -> void:
+	if GameState.is_in_team and not GameState.is_team_leader():
+		_show_toast("当前正处于队伍中，请等待队长带领全队统一出征！")
+		return
+		
+	_show_toast("正在带领队伍出征，前往野外专属挂机位面...")
+	if NetworkClient.is_connected:
+		var st_id = GameState.current_stage_info.get("stage", 1)
+		NetworkClient.send_raw("stage %d" % st_id)
+		
+	await get_tree().create_timer(0.2).timeout
+	get_tree().change_scene_to_file("res://scenes/afk/afk_main_hud.tscn")
+
+## 打开天梯排行榜弹窗
+func _open_leaderboard() -> void:
+	if toast_label: toast_label.visible = false
+	leaderboard_modal.visible = true
+	NetworkClient.send_raw("tops lvl")
+
+func _close_leaderboard() -> void:
+	leaderboard_modal.visible = false
+
+func _render_leaderboard_text(raw_text: String) -> void:
+	for c in rank_list_vbox.get_children():
+		c.queue_free()
+		
+	var lines = raw_text.split("\n")
+	for line in lines:
+		var clean = AnsiHelper.to_plain_text(line).strip_edges()
+		if clean.is_empty() or "---" in clean or "===" in clean:
+			continue
+			
+		var lbl = Label.new()
+		lbl.text = clean
+		if "名次" in clean:
+			lbl.add_theme_font_size_override("font_size", 14)
+			lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+		else:
+			lbl.add_theme_font_size_override("font_size", 13)
+			if clean.begins_with("1 ") or clean.begins_with("1\t"):
+				lbl.text = "🥇 " + clean
+				lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
+			elif clean.begins_with("2 ") or clean.begins_with("2\t"):
+				lbl.text = "🥈 " + clean
+				lbl.add_theme_color_override("font_color", Color(0.9, 0.92, 0.95))
+			elif clean.begins_with("3 ") or clean.begins_with("3\t"):
+				lbl.text = "🥉 " + clean
+				lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.45))
+			else:
+				lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+				
+		rank_list_vbox.add_child(lbl)
+
+## 退出到登录页
+func _on_exit_to_login() -> void:
+	NetworkClient.send_raw("quit")
+	NetworkClient.disconnect_server()
+	get_tree().change_scene_to_file("res://scenes/login/login_screen.tscn")
+
+## Toast 飘字提醒
+func _show_toast(msg: String) -> void:
+	toast_label.text = msg
+	toast_label.visible = true
+	await get_tree().create_timer(2.5).timeout
+	if toast_label.text == msg:
+		toast_label.visible = false
+
+const CLASS_TO_AVATAR_NAME = {
+	"ama": "amazon", "amazon": "amazon",
+	"ass": "assassin", "asn": "assassin", "assassin": "assassin",
+	"bar": "barbarian", "barbarian": "barbarian",
+	"dru": "druid", "druid": "druid",
+	"nec": "necromancer", "necromancer": "necromancer",
+	"pal": "paladin", "paladin": "paladin",
+	"sor": "sorceress", "sorceress": "sorceress"
+}
+
+## 辅助：获取职业头像
+func get_hero_avatar_icon(cls: String) -> Texture2D:
+	var clean_cls = cls.to_lower().strip_edges()
+	var full_name = CLASS_TO_AVATAR_NAME.get(clean_cls, clean_cls)
+	var path = "res://assets/avatars/%sicon.lowend.png" % full_name
+	if ResourceLoader.exists(path):
+		return load(path)
+	return load("res://assets/avatars/sorceressicon.lowend.png")
+
+## 辅助：解析难度代码
+func parse_difficulty_code(diff: String) -> String:
+	var d = diff.to_lower()
+	if d in ["hell", "dy", "diyu"]:
+		return "hell"
+	elif d in ["nightmare", "nm", "em", "emeng"]:
+		return "nm"
+	return "normal"
+
+## 辅助：难度展示信息
+func get_difficulty_display(diff_code: String) -> Dictionary:
+	if diff_code == "hell":
+		return { "label": "【地狱】", "color": Color(1.0, 0.35, 0.35) }
+	elif diff_code == "nm":
+		return { "label": "【噩梦】", "color": Color(1.0, 0.85, 0.1) }
+	return { "label": "【普通】", "color": Color(0.85, 0.9, 0.95) }
