@@ -321,7 +321,10 @@ func _on_login_success(characters: Array) -> void:
 
 func _on_login_failed(err_msg: String) -> void:
 	_set_loading(false)
-	_set_status("登录失败: " + err_msg, Color(1.0, 0.3, 0.3))
+	var display_msg = err_msg
+	if not ("失败" in display_msg or "错误" in display_msg or "已被" in display_msg or "不存在" in display_msg):
+		display_msg = "操作失败: " + display_msg
+	_set_status(display_msg, Color(1.0, 0.3, 0.3))
 
 func _set_loading(loading: bool) -> void:
 	btn_login.disabled = loading

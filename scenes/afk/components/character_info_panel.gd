@@ -221,7 +221,10 @@ func render_gscore_data(data: Dictionary) -> void:
 	var exp = _safe_int(data.get("exp"), 0)
 	var next_exp = _safe_int(data.get("next_exp"), 160)
 	var exp_pct = float(data.get("exp_pct", -1.0))
-	current_stat_points = _safe_int(data.get("stat_points"), 0)
+	var raw_pts = data.get("stat_points")
+	if raw_pts == null:
+		raw_pts = data.get("stat_pts", 0)
+	current_stat_points = _safe_int(raw_pts, 0)
 	
 	if lbl_level: lbl_level.text = str(lvl)
 	if lbl_exp:
@@ -309,10 +312,26 @@ func render_gscore_data(data: Dictionary) -> void:
 
 		# (4) 打击特技与偷取
 		_render_proc(lbl_cb, _safe_int(combat.get("crushing_blow"), 0))
-		_render_proc(lbl_ds, _safe_int(combat.get("deadly_strike"), 0))
+		var ds_val = _safe_int(combat.get("deadly_strike"), 0)
+		var ds_eq = _safe_int(combat.get("ds_equip"), 0)
+		var cs_sk = _safe_int(combat.get("cs_skill"), 0)
+		_render_proc(lbl_ds, ds_val)
+		if lbl_ds:
+			if ds_eq > 0 and cs_sk > 0:
+				lbl_ds.tooltip_text = "综合双倍几率: %d%%\n- 装备致命 (DS): %d%%\n- 技能暴击 (CS): %d%%" % [ds_val, ds_eq, cs_sk]
+			elif ds_eq > 0:
+				lbl_ds.tooltip_text = "装备致命 (DS): %d%%" % ds_eq
+			elif cs_sk > 0:
+				lbl_ds.tooltip_text = "技能暴击 (CS): %d%%" % cs_sk
+			else:
+				lbl_ds.tooltip_text = ""
 		_render_proc(lbl_ow, _safe_int(combat.get("open_wounds"), 0))
-		if lbl_crit: lbl_crit.text = "%d%%" % _safe_int(combat.get("crit_rate"), 0)
-		if lbl_crit_dmg: lbl_crit_dmg.text = "%d%%" % _safe_int(combat.get("crit_dmg"), 200)
+
+		# 隐藏非 D2 原版的冗余行（暴击率与暴击伤害）
+		if lbl_crit and lbl_crit.get_parent():
+			lbl_crit.get_parent().visible = false
+		if lbl_crit_dmg and lbl_crit_dmg.get_parent():
+			lbl_crit_dmg.get_parent().visible = false
 		_render_proc(lbl_ll, _safe_int(combat.get("life_steal"), 0))
 		_render_proc(lbl_ml, _safe_int(combat.get("mana_steal"), 0))
 		if lbl_lak: lbl_lak.text = str(_safe_int(combat.get("life_after_kill"), 0))

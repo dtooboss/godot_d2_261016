@@ -149,12 +149,17 @@ var current_spots: Array = []
 var _user_selected_act: bool = false
 
 func _ready() -> void:
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	if map_background:
+		map_background.mouse_filter = Control.MOUSE_FILTER_STOP
+
 	if btn_switch_act and change_world_panel:
 		btn_switch_act.pressed.connect(func(): 
 			change_world_panel.show()
 		)
 	if btn_close:
 		btn_close.pressed.connect(func(): 
+			_user_selected_act = false
 			hide()
 			closed.emit()
 		)
@@ -165,31 +170,35 @@ func _ready() -> void:
 	_auto_locate_act()
 	update_progress(GameState.player_max_stage)
 
+func reset_user_selection() -> void:
+	_user_selected_act = false
+
 ## 智能定位到玩家当前选点或物理身处的大幕
-## 优先级 1: 用户在当前会话主动切换了大幕 (_user_selected_act)
-## 优先级 2: 玩家选点所在的大幕 (GameState.selected_act) - 例如在 Act 1 选点挂机，打开大地图始终停留在 Act 1
-## 优先级 3: 玩家当前战斗关卡所属大幕 (GameState.current_stage_info)
-## 优先级 4: 玩家当前物理所在城镇/大幕 (GameState.current_location_act)
+## 优先级 1: 用户在当前打开会话中主动切换了大幕 (_user_selected_act)
+## 优先级 2: 玩家当前战斗关卡所属大幕 (GameState.current_stage_info)
+## 优先级 3: 玩家当前物理所在城镇/大幕 (GameState.current_location_act)
+## 优先级 4: 玩家选点所在的大幕 (GameState.selected_act)
 ## 优先级 5: 历史最高进度兜底 (仅首次登录无任何选点与所在记录时)
 func _auto_locate_act() -> void:
 	if _user_selected_act: return
 
-	# 优先对齐选点所属大幕 (例如在 Act 1 挂机，打开大地图 100% 保持 Act 1)
-	if GameState.selected_act != "" and ACTS_CONFIG.has(GameState.selected_act):
-		switch_act(GameState.selected_act, false)
-		return
-
-	# 其次对齐当前战斗关卡所属大幕
+	# 优先对齐当前战斗关卡所属大幕 (在野外战斗挂机时，打开大地图必定直达当前挂机大幕)
 	if GameState.current_stage_info is Dictionary and GameState.current_stage_info.has("act"):
-		var a_num = int(GameState.current_stage_info.get("act", 1))
-		var a_key = "act%d" % a_num
-		if ACTS_CONFIG.has(a_key):
-			switch_act(a_key, false)
-			return
+		var a_num = AnsiHelper.to_safe_int(GameState.current_stage_info.get("act"), 0)
+		if a_num > 0:
+			var a_key = "act%d" % a_num
+			if ACTS_CONFIG.has(a_key):
+				switch_act(a_key, false)
+				return
 
-	# 再次对齐当前物理所在城镇
+	# 其次对齐当前物理所在城镇/大幕 (身在城镇时打开大地图精准呈现当前幕)
 	if GameState.current_location_act != "" and ACTS_CONFIG.has(GameState.current_location_act):
 		switch_act(GameState.current_location_act, false)
+		return
+
+	# 再次对齐选点所属大幕
+	if GameState.selected_act != "" and ACTS_CONFIG.has(GameState.selected_act):
+		switch_act(GameState.selected_act, false)
 		return
 
 	var max_s = GameState.player_max_stage if "player_max_stage" in GameState else 0
@@ -209,8 +218,7 @@ func switch_act(act_id: String, user_explicit: bool = true) -> void:
 	current_act_id = act_id
 	var cfg = ACTS_CONFIG[act_id]
 	current_world_name = cfg["name"]
-	if world_name_label:
-		world_name_label.text = current_world_name
+	_update_title_label()
 		
 	if not map_background:
 		map_background = get_node_or_null("MapBackground")
@@ -223,10 +231,18 @@ func switch_act(act_id: String, user_explicit: bool = true) -> void:
 		
 	update_progress(GameState.player_max_stage)
 
+func _update_title_label() -> void:
+	if not world_name_label: return
+	if GameState.is_in_team and not GameState.team_bottleneck_name.is_empty():
+		world_name_label.text = "%s (⚠️ 队伍受限: %s)" % [current_world_name, GameState.team_bottleneck_name]
+	else:
+		world_name_label.text = current_world_name
+
 ## 根据玩家最高通关纪录动态刷新据点与路线状态
 ## 严格纯链式单向解锁逻辑：通关第 N 关，仅且只解锁第 N+1 关
 ## 难度规则：若玩家处于/已解锁更高难度，低难度的全部站点默认全开；
 func update_progress(user_max_stage: int) -> void:
+	_update_title_label()
 	if current_spots.is_empty():
 		var cfg = ACTS_CONFIG.get(current_act_id, ACTS_CONFIG["act1"])
 		current_spots.clear()
@@ -235,21 +251,27 @@ func update_progress(user_max_stage: int) -> void:
 
 	var cur_max = max(0, user_max_stage)
 	
-	var player_diff = "normal"
+	var player_diff = GameState.selected_difficulty
+	if player_diff.is_empty() and GameState.selected_character:
+		player_diff = str(GameState.selected_character.get("difficulty", "normal")).to_lower()
+	if player_diff == "nightmare": player_diff = "nm"
+	
 	var unlocked_diff_level = 1
 	if GameState.selected_character and not GameState.selected_character.is_empty():
-		player_diff = str(GameState.selected_character.get("difficulty", "normal")).to_lower()
-		unlocked_diff_level = int(GameState.selected_character.get("d2_diff_unlocked", GameState.selected_character.get("d2_unlocked_diff", 1)))
+		unlocked_diff_level = AnsiHelper.to_safe_int(GameState.selected_character.get("unlocked_diff", GameState.selected_character.get("d2_diff_unlocked", GameState.selected_character.get("d2_unlocked_diff", 1))), 1)
 	
 	var cur_diff_level = 1
-	if player_diff in ["nm", "nightmare"]: cur_diff_level = 2
-	elif player_diff in ["hell"]: cur_diff_level = 3
+	if player_diff == "nm": cur_diff_level = 2
+	elif player_diff == "hell": cur_diff_level = 3
 	
 	# 若当前难度低于其已解锁最高难度，低难度站点全开！
 	var is_lower_diff_cleared = (cur_diff_level < unlocked_diff_level)
 
 	for s in current_spots:
-		var s_id = int(s.get("stage_id", 1))
+		var s_id = AnsiHelper.to_safe_int(s.get("stage_id"), 1)
+		# 优先采用服务端下发的权威区域等级 (alvl)
+		if GameState.has_method("get_stage_alvl"):
+			s["lvl"] = GameState.get_stage_alvl(s_id, AnsiHelper.to_safe_int(s.get("lvl"), 1))
 		if is_lower_diff_cleared:
 			s["cleared"] = true
 			s["is_current"] = false
@@ -306,13 +328,13 @@ func _on_spot_clicked(spot_data: Dictionary) -> void:
 	print("[WorldMap] 点击据点: ", spot_data.get("name", ""), " (Stage ", spot_data.get("stage_id", 1), ")")
 	
 	# 准确记录玩家主动选点状态与所属大幕
-	var st_id = int(spot_data.get("stage_id", 1))
+	var st_id = AnsiHelper.to_safe_int(spot_data.get("stage_id"), 1)
 	GameState.selected_stage_id = st_id
 	GameState.selected_act = current_act_id
 	GameState.current_stage_info = {
 		"stage": st_id,
 		"name": spot_data.get("name", ""),
-		"act": int(current_act_id.replace("act", ""))
+		"act": AnsiHelper.to_safe_int(current_act_id.replace("act", ""), 1)
 	}
 	
 	enter_spot.emit(spot_data)

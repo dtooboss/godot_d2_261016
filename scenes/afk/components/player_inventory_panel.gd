@@ -39,8 +39,19 @@ var max_bag_pages: int = 4
 var extend_cost: int = 50000
 var _pending_new_item_pickup_fx: bool = false
 var new_item_ids: Dictionary = {}
+var current_hovered_slot: int = -1
 
 func _ready() -> void:
+	if little_pocket_panel:
+		little_pocket_panel.z_index = 150
+		little_pocket_panel.z_as_relative = false
+	if socketing_workbench_panel:
+		socketing_workbench_panel.z_index = 150
+		socketing_workbench_panel.z_as_relative = false
+	if add_inv_panel:
+		add_inv_panel.z_index = 160
+		add_inv_panel.z_as_relative = false
+
 	if page_scroll_container:
 		var v_bar = page_scroll_container.get_v_scroll_bar()
 		if v_bar:
@@ -57,6 +68,10 @@ func _ready() -> void:
 	
 	if btn_pocket and little_pocket_panel:
 		btn_pocket.pressed.connect(func():
+			if not little_pocket_panel.visible:
+				# 打开小口袋时，自动互斥关闭工坊
+				if socketing_workbench_panel and socketing_workbench_panel.visible:
+					socketing_workbench_panel.close()
 			little_pocket_panel.toggle()
 		)
 		little_pocket_panel.item_hovered.connect(func(data, pos):
@@ -69,16 +84,22 @@ func _ready() -> void:
 
 	if btn_workbench and socketing_workbench_panel:
 		btn_workbench.pressed.connect(func():
-			socketing_workbench_panel.visible = not socketing_workbench_panel.visible
-			if socketing_workbench_panel.visible:
-				# 单窗口互斥: 关魔盒
+			var will_open = not socketing_workbench_panel.visible
+			if will_open:
+				# 打开工坊时，自动互斥关闭小口袋
+				if little_pocket_panel and little_pocket_panel.visible:
+					little_pocket_panel.close()
+				# 单窗口互斥: 关魔盒 (兼顾安全区与挂机区)
 				var hud_w = get_parent()
-				while hud_w and not (hud_w is AFK_MainHUD):
+				while hud_w:
+					if "cube_panel" in hud_w and hud_w.cube_panel:
+						hud_w.cube_panel.visible = false
+						break
 					hud_w = hud_w.get_parent()
-				if hud_w and hud_w.cube_panel:
-					hud_w.cube_panel.visible = false
 				socketing_workbench_panel.set_current_page(current_page)
 				socketing_workbench_panel.open()
+			else:
+				socketing_workbench_panel.close()
 		)
 		socketing_workbench_panel.item_hovered.connect(func(data, pos):
 			item_hovered.emit(data, pos)
@@ -236,7 +257,7 @@ func _init_grid() -> void:
 		btn.expand_icon = true
 		
 		btn.mouse_entered.connect(_on_slot_hovered.bind(i, btn))
-		btn.mouse_exited.connect(_on_slot_unhovered)
+		btn.mouse_exited.connect(_on_slot_unhovered.bind(i))
 		btn.gui_input.connect(_on_slot_gui_input.bind(i, btn))
 		
 		grid_container.add_child(btn)
@@ -250,13 +271,13 @@ func update_gold(gold_val: int) -> void:
 func render_lpc_items(items_list: Array, charm_used: int = -1, charm_max: int = 40, total_pages: int = 1, cur_page: int = -1, extra_info: Dictionary = {}) -> void:
 	if not extra_info.is_empty():
 		if extra_info.has("unlocked_pages"):
-			unlocked_pages = int(extra_info.get("unlocked_pages", 1))
+			unlocked_pages = AnsiHelper.to_safe_int(extra_info.get("unlocked_pages"), 1)
 		if extra_info.has("max_pages"):
-			max_bag_pages = int(extra_info.get("max_pages", 4))
+			max_bag_pages = AnsiHelper.to_safe_int(extra_info.get("max_pages"), 4)
 		if extra_info.has("extend_cost"):
-			extend_cost = int(extra_info.get("extend_cost", 0))
+			extend_cost = AnsiHelper.to_safe_int(extra_info.get("extend_cost"), 0)
 		if extra_info.has("gold"):
-			update_gold(int(extra_info.get("gold", 0)))
+			update_gold(AnsiHelper.to_safe_int(extra_info.get("gold"), 0))
 			
 	var target_pages = max(total_pages, unlocked_pages)
 	var need_refresh_btns = false
@@ -497,9 +518,11 @@ func add_incremental_reward(reward_item: Dictionary, gold_val: int = 0) -> bool:
 			var server_amt = AnsiHelper.to_safe_int(item_data.get("amount"), 0)
 			var cur_amt = AnsiHelper.to_safe_int(existing.get("amount"), 1)
 			
-			# 服务端 COMBINED_ITEM move 结算后，下发的 amount 通常已经是合并后的最新总数 (如 7)
+			# 服务端 COMBINED_ITEM 原地合并下发权威总数 (如 7); 若一致说明已被 gbag_item_update 同步
 			if server_amt > cur_amt:
 				existing["amount"] = server_amt
+			elif server_amt == cur_amt:
+				pass
 			else:
 				existing["amount"] = cur_amt + max(1, server_amt)
 				
@@ -528,50 +551,29 @@ func add_incremental_reward(reward_item: Dictionary, gold_val: int = 0) -> bool:
 				var r_amt = AnsiHelper.to_safe_int(raw.get("amount"), 1)
 				if server_amt > r_amt:
 					raw["amount"] = server_amt
+				elif server_amt == r_amt:
+					pass
 				else:
 					raw["amount"] = r_amt + max(1, server_amt)
 				if item_data.has("file_id"): raw["file_id"] = item_data["file_id"]
 				return true
 
-	# 2. 空位检索：寻找当前页第一个空闲槽位
-	var empty_slot = -1
-	for i in range(min(TOTAL_SLOTS, slots.size())):
-		if not items_map.has(i):
-			empty_slot = i
-			break
-			
-	raw_all_items.append(reward_item)
-	
-	if empty_slot != -1:
-		set_lpc_item(empty_slot, item_data)
-		_play_slot_pickup_fx(empty_slot)
-		return true
-	else:
-		# 当前页 84 格已满：物品自然归入后续页码，绝不强制跳转跳页！保持玩家当前视图稳定
-		var needed_pages = int(ceil(float(raw_all_items.size()) / float(TOTAL_SLOTS)))
-		var max_allowed = max(unlocked_pages, inventory_page_count)
-		if needed_pages > inventory_page_count:
-			inventory_page_count = needed_pages
-			_update_page_buttons()
-			
-		# 若所有已解锁页数均已装满，提示满包
-		if unlocked_pages > 0 and raw_all_items.size() > unlocked_pages * TOTAL_SLOTS:
-			_notify_inventory_full()
-			return false
-			
-		return true
+	# 2. (2026-10-04 虚影根治) 不再本地伪造格子:
+	#    堆的权威位置/数量由服务端 gbag_patch 帧下发; 当前页与缓存都未命中时
+	#    静默等待 patch (战利品横幅照常弹出, 玩家感知不缺失; 翻页时 gbag 全量帧呈现真相)
+	return true
 
 func _is_item_stackable(item_data: Dictionary) -> bool:
 	if bool(item_data.get("is_combined", false)):
 		return true
-	if int(item_data.get("is_rune", 0)) == 1 or int(item_data.get("is_gem", 0)) == 1:
+	if AnsiHelper.to_safe_int(item_data.get("is_rune"), 0) == 1 or AnsiHelper.to_safe_int(item_data.get("is_gem"), 0) == 1:
 		return true
 		
 	var it_type = str(item_data.get("type", "")).to_lower()
 	if it_type in ["符文", "宝石", "药水", "卷轴", "材料", "rune", "gem", "potion", "scroll", "material"]:
 		return true
 		
-	var id_s = str(item_data.get("id", "")).to_lower()
+	var id_s = str(item_data.get("id", "")) .to_lower()
 	if id_s.begins_with("r") and id_s.length() <= 3 and id_s.substr(1).is_valid_int():
 		return true
 	if id_s in ["isc", "tsc", "mp1", "mp2", "mp3", "mp4", "mp5", "hp1", "hp2", "hp3", "hp4", "hp5", "rvs", "rvl", "key"]:
@@ -589,15 +591,26 @@ func _is_item_stackable(item_data: Dictionary) -> bool:
 		
 	return false
 
+## 获取宿主控制器 (自动适配 AFK_MainHUD 战斗挂机房 或 TownHubController 主城大本营)
+func _get_host_controller() -> Node:
+	var tree = get_tree()
+	if not tree:
+		return null
+	var cur = tree.current_scene
+	if cur and ("char_info_panel" in cur or "cube_panel" in cur):
+		return cur
+	var p = get_parent()
+	while p:
+		if "char_info_panel" in p or "cube_panel" in p:
+			return p
+		p = p.get_parent()
+	return null
+
 func _notify_inventory_full() -> void:
 	print("[PlayerInventoryPanel] 背包已满！请及时整理背包或花费金币解锁新页码。")
-	var cur_scene = get_tree().current_scene
-	if cur_scene and cur_scene.has_method("show_toast"):
-		cur_scene.show_toast("背包已满！请及时整理背包或点击 [+] 扩充新页。")
-	else:
-		var hud = get_tree().root.find_child("AFK_MainHUD", true, false)
-		if hud and hud.has_method("show_toast"):
-			hud.show_toast("背包已满！请及时整理背包或点击 [+] 扩充新页。")
+	var host = _get_host_controller()
+	if host and host.has_method("show_toast"):
+		host.show_toast("背包已满！请及时整理背包或点击 [+] 扩充新页。")
 
 ## 战利品入包高光微动效 (强化爆装正反馈)
 func _play_slot_pickup_fx(slot_idx: int) -> void:
@@ -610,6 +623,47 @@ func _play_slot_pickup_fx(slot_idx: int) -> void:
 	tw.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
 
 ## 增量更新指定物品数量 (Delta Update, 零重绘、零闪烁、微秒级响应)
+## 服务端权威账本补丁 (2026-10-04 虚影根治): 掉落入包后最终堆的页/槽/完整条目
+## v2: 条目过 _parse_single_lpc_item 生成 icon_texture (修无图标); 名字匹配优先=合并必原地涨数;
+##     x/y 仅落空闲格 (序列错位时绝不覆盖他人物品); 空格兜底
+func apply_gbag_patch(data: Dictionary) -> void:
+	var page = AnsiHelper.to_safe_int(data.get("page"), -1)
+	var raw_it = data.get("item")
+	if page < 1 or not (raw_it is Dictionary) or raw_it.is_empty():
+		return
+	# 非当前页: 不做本地渲染 (翻页时 gbag 全量帧天然呈现真相), 坚决不伪造
+	if page != current_page:
+		return
+	var it = _parse_single_lpc_item(raw_it)
+	var clean_name = AnsiHelper.to_plain_text(str(raw_it.get("name", "")))
+	var is_stack = _is_item_stackable(it)
+	var target_slot = -1
+	# 1) 同堆名字匹配优先: 仅可堆叠物品生效！合并=原地覆盖涨数, 永不另起格子
+	if is_stack:
+		for s_idx in items_map.keys():
+			var ex = items_map[s_idx]
+			if AnsiHelper.to_plain_text(str(ex.get("name", ""))) == clean_name:
+				target_slot = s_idx
+				break
+	# 2) x/y 落位: 仅当目标格空闲 (服务端/客户端序列短暂错位时绝不覆盖他人物品)
+	if target_slot == -1:
+		var gx = AnsiHelper.to_safe_int(raw_it.get("x"), -1)
+		var gy = AnsiHelper.to_safe_int(raw_it.get("y"), -1)
+		if gx >= 0 and gy >= 0:
+			var calc_slot = gy * COLS + gx
+			if calc_slot >= 0 and calc_slot < min(TOTAL_SLOTS, slots.size()) and not items_map.has(calc_slot):
+				target_slot = calc_slot
+	# 3) 第一个空格兜底
+	if target_slot == -1:
+		for i in range(min(TOTAL_SLOTS, slots.size())):
+			if not items_map.has(i):
+				target_slot = i
+				break
+	if target_slot == -1:
+		return
+	set_lpc_item(target_slot, it)
+	_play_slot_pickup_fx(target_slot)
+
 func update_item_amount(file_id: String, new_amount: int) -> bool:
 	if file_id.is_empty():
 		return false
@@ -689,13 +743,16 @@ func _is_item_consumable(item_data: Dictionary) -> bool:
 	return false
 
 func _on_slot_hovered(slot_idx: int, btn: Button) -> void:
+	current_hovered_slot = slot_idx
 	if items_map.has(slot_idx):
 		var it = items_map[slot_idx]
 		_clear_item_new_state(it, btn)
 		item_hovered.emit(it, btn.global_position)
 
-func _on_slot_unhovered() -> void:
-	item_unhovered.emit()
+func _on_slot_unhovered(slot_idx: int = -1) -> void:
+	if slot_idx == -1 or current_hovered_slot == slot_idx:
+		current_hovered_slot = -1
+		item_unhovered.emit()
 
 func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -> void:
 	if event is InputEventMouseButton and event.pressed:
@@ -729,16 +786,27 @@ func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -
 				if fid.is_empty():
 					return
 					
+				# 0.4 如果储物箱面板正打开 -> 直接存入储物箱当前仓位！
+				var host = _get_host_controller()
+				if host and "stash_panel" in host and host.stash_panel and host.stash_panel.is_visible_in_tree():
+					var s_tab = host.stash_panel.current_tab
+					_send_lpc_cmd("stash store %s %d" % [fid, s_tab])
+					return
+
+				# 0.5 如果双向交易面板处于开启状态 -> 调用 trade_panel.offer_item (叠加物品智能弹窗选数量，单件装备直接放入)
+				var cur_scene = get_tree().current_scene
+				if cur_scene and "trade_panel" in cur_scene and cur_scene.trade_panel and cur_scene.trade_panel.visible:
+					cur_scene.trade_panel.offer_item(it)
+					return
+
 				# 1. 如果工坊面板正打开 -> 优先处理工坊操作 (直接由 LPC 指令全权判断处理，前端只负责发指令与纯渲染)
 				if socketing_workbench_panel and socketing_workbench_panel.is_visible_in_tree():
 					_send_lpc_cmd("gsocket put %s %d" % [fid, current_page])
 					return
 
 				# 2. 魔盒面板正打开 -> 放入赫拉迪克方块
-				var hud_c = get_parent()
-				while hud_c and not (hud_c is AFK_MainHUD):
-					hud_c = hud_c.get_parent()
-				if hud_c and hud_c.cube_panel and hud_c.cube_panel.is_visible_in_tree():
+				var host_c = _get_host_controller()
+				if host_c and host_c.cube_panel and host_c.cube_panel.is_visible_in_tree():
 					_send_lpc_cmd("gcube put %s" % fid)
 					return
 
@@ -755,11 +823,8 @@ func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -
 					return
 
 				# 5. 只有当角色纸娃娃窗口明确打开时 -> 右键装备才快速穿戴换装！
-				var hud = get_parent()
-				while hud and not (hud is AFK_MainHUD):
-					hud = hud.get_parent()
 				var char_panel_open = false
-				if hud and hud.char_info_panel and hud.char_info_panel.is_visible_in_tree():
+				if host and host.char_info_panel and host.char_info_panel.is_visible_in_tree():
 					char_panel_open = true
 					
 				if char_panel_open:
@@ -787,7 +852,7 @@ func get_slot_drag_data(_slot_type: String, slot_idx: int) -> Variant:
 	}
 
 func can_slot_drop_data(_slot_type: String, _slot_idx: int, data: Variant) -> bool:
-	if data is Dictionary and (data.get("source") == "pocket" or data.get("source") == "paperdoll" or data.get("source") == "cube"):
+	if data is Dictionary and (data.get("source") == "pocket" or data.get("source") == "paperdoll" or data.get("source") == "cube" or data.get("source") == "stash"):
 		return true
 	return false
 
@@ -804,9 +869,13 @@ func on_slot_drop_data(_slot_type: String, _slot_idx: int, data: Variant) -> voi
 			_send_lpc_cmd("gremove %s %d" % [fid, current_page])
 		elif data.get("source") == "cube":
 			_send_lpc_cmd("gcube take %s" % fid)
+		elif data.get("source") == "stash":
+			var s_tab = data.get("tab", 1)
+			var uuid = str(it.get("uuid", fid))
+			_send_lpc_cmd("stash take %d %s" % [s_tab, uuid])
 
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
-	if data is Dictionary and (data.get("source") == "pocket" or data.get("source") == "paperdoll" or data.get("source") == "cube"):
+	if data is Dictionary and (data.get("source") == "pocket" or data.get("source") == "paperdoll" or data.get("source") == "cube" or data.get("source") == "stash"):
 		return true
 	return false
 
@@ -823,6 +892,10 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 			_send_lpc_cmd("gremove %s %d" % [fid, current_page])
 		elif data.get("source") == "cube":
 			_send_lpc_cmd("gcube take %s" % fid)
+		elif data.get("source") == "stash":
+			var s_tab = data.get("tab", 1)
+			var uuid = str(it.get("uuid", fid))
+			_send_lpc_cmd("stash take %d %s" % [s_tab, uuid])
 
 func _on_pocket_action(action: String, file_id: String) -> void:
 	# 向服务端发送 charm_bag in <file_id> 或 charm_bag out <file_id>
@@ -949,16 +1022,16 @@ func _execute_batch_salvage() -> void:
 	# 尾参页码: 服务端分解后精准回推当前浏览页 (gxxxx 保页约定)
 	var cmd = "gfenjie %s %d" % [";".join(fids), current_page]
 	
-	# 如果勾选了暗金且开启了二次确认，联动 HUD 弹窗
-	var hud = get_tree().root.find_child("AFK_MainHUD", true, false)
+	# 如果勾选了暗金且开启了二次确认，联动宿主控制器弹窗
+	var host = _get_host_controller()
 	var confirm_unique_enabled = true
-	if hud and hud.has_node("%PickupSettingPanel"):
-		var p_panel = hud.get_node("%PickupSettingPanel")
+	if host and host.has_node("%PickupSettingPanel"):
+		var p_panel = host.get_node("%PickupSettingPanel")
 		if p_panel.current_config:
 			confirm_unique_enabled = bool(p_panel.current_config.get("confirm_unique", true))
 			
-	if has_unique and confirm_unique_enabled and hud and hud.has_node("%SalvageUniqueConfirmDialog"):
-		var dlg = hud.get_node("%SalvageUniqueConfirmDialog")
+	if has_unique and confirm_unique_enabled and host and host.has_node("%SalvageUniqueConfirmDialog"):
+		var dlg = host.get_node("%SalvageUniqueConfirmDialog")
 		dlg.prompt_confirm(unique_item_data, func(_unused):
 			_send_lpc_cmd(cmd)
 			_exit_multi_select_mode()

@@ -11,6 +11,84 @@ var current_slot_pos: Vector2 = Vector2.ZERO
 var tooltip_sockets: SocketsOverlay = null
 var sockets_bar: HBoxContainer = null
 
+const CACHE_TTL_MS: int = 60000 # 60秒轻量客户端短时缓存 (1分钟内反复查看 0 发包秒显)
+const DEBOUNCE_TIME_SEC: float = 0.25 # 250ms 黄金悬浮防抖阈值 (滑过零网络发包，停顿即平滑补充详细属性)
+
+# 静态短时缓存：cache_key -> { "desc": String, "sock": int, "inlays": Array, "timestamp": int, "large_icon": String }
+static var _tooltip_cache: Dictionary = {}
+
+var _debounce_timer: SceneTreeTimer = null
+var _pending_req_cmd: String = ""
+var _pending_cache_key: String = ""
+var _in_flight_cache_key: String = ""
+var _current_displayed_key: String = ""
+
+static func clear_cache() -> void:
+	_tooltip_cache.clear()
+
+static func _get_cache_key(data: Dictionary) -> String:
+	var fid = str(data.get("file_id", "")).strip_edges()
+	if not fid.is_empty():
+		return fid
+	var cmd = str(data.get("cmd", "")).strip_edges()
+	if not cmd.is_empty():
+		return cmd
+	var name_s = str(data.get("name", ""))
+	var q_s = str(data.get("quality", ""))
+	return "%s_%s" % [name_s, q_s]
+
+func _cancel_debounce() -> void:
+	_debounce_timer = null
+	_pending_req_cmd = ""
+	_pending_cache_key = ""
+
+func _start_debounce_request(cmd_to_send: String, key_to_cache: String) -> void:
+	var tree = get_tree()
+	if not tree:
+		return
+	var timer = tree.create_timer(DEBOUNCE_TIME_SEC)
+	_debounce_timer = timer
+	timer.timeout.connect(func():
+		if _debounce_timer == timer and _pending_cache_key == key_to_cache and visible:
+			_debounce_timer = null
+			_in_flight_cache_key = key_to_cache
+			_send_net_request(cmd_to_send)
+	)
+
+func _send_net_request(cmd_to_send: String) -> void:
+	if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
+		var net = get_node_or_null("/root/NetworkClient")
+		if net and net.is_connected:
+			net.send_raw(cmd_to_send)
+
+func _render_from_cache(cache_entry: Dictionary, data: Dictionary) -> void:
+	var large_icon = str(cache_entry.get("large_icon", ""))
+	var icon_tex: Texture2D = null
+	if not large_icon.is_empty():
+		icon_tex = AnsiHelper.load_item_texture(large_icon)
+	if not icon_tex:
+		icon_tex = data.get("icon_texture", null)
+	if not icon_tex and data.has("icon"):
+		icon_tex = AnsiHelper.load_item_texture(str(data.get("icon", "")))
+		
+	if icon_tex:
+		item_icon.texture = icon_tex
+		icon_frame.show()
+	else:
+		icon_frame.hide()
+		
+	var sock_count = int(cache_entry.get("sock", 0))
+	var inlays = cache_entry.get("inlays", [])
+	if not (inlays is Array):
+		inlays = []
+	_ensure_tooltip_sockets()
+	if tooltip_sockets:
+		tooltip_sockets.set_sockets(sock_count, inlays)
+	_update_sockets_bar(sock_count, inlays)
+	
+	var desc = str(cache_entry.get("desc", ""))
+	_apply_dynamic_size(AnsiHelper.to_bbcode(desc), sock_count)
+
 func _ready() -> void:
 	hide()
 	z_as_relative = false
@@ -243,6 +321,8 @@ func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
 	if not content_label:
 		return
 	
+	_cancel_debounce()
+	
 	# 确保 Tooltip 永远处于同级节点的最顶层
 	z_as_relative = false
 	z_index = 500
@@ -253,8 +333,20 @@ func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
 	var file_id = str(data.get("file_id", ""))
 	if current_item_cmd.is_empty() and not file_id.is_empty():
 		current_item_cmd = "look " + file_id
+		
+	var cache_key = _get_cache_key(data)
+	_current_displayed_key = cache_key
 	
-	# 1. 顶部装备大图原画展示
+	# 1. 优先检查本地短时缓存 (5秒有效，命中则 0 网络包秒开)
+	var now = Time.get_ticks_msec()
+	if _tooltip_cache.has(cache_key):
+		var cache_entry = _tooltip_cache[cache_key]
+		if (now - int(cache_entry.get("timestamp", 0))) < CACHE_TTL_MS:
+			_render_from_cache(cache_entry, data)
+			show()
+			return
+	
+	# 2. 缓存未命中：先以本地已有属性秒显骨架 (手感丝滑零白屏)
 	var icon_tex: Texture2D = data.get("icon_texture", null)
 	var icon_path: String = str(data.get("icon", ""))
 	if not icon_tex and not icon_path.is_empty():
@@ -266,7 +358,6 @@ func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
 	else:
 		icon_frame.hide()
 		
-	# 2. 富文本属性内容格式化
 	var raw_name = data.get("name", "未命名装备")
 	var desc = str(data.get("desc", ""))
 	if desc.is_empty() and data.has("item_info") and data["item_info"] is Dictionary:
@@ -281,7 +372,7 @@ func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
 			item_icon.texture = large_tex
 			icon_frame.show()
 			
-	# 3. 解析装备凹槽与镶嵌物 (支持原生字典字段与 ?sock= URL 双轨解析)
+	# 解析装备凹槽与镶嵌物 (支持原生字典字段与 ?sock= URL 双轨解析)
 	var sock_count = AnsiHelper.to_safe_int(data.get("sockets"), 0)
 	var inlays = data.get("inlays", [])
 	if not (inlays is Array):
@@ -335,43 +426,63 @@ func show_item(data: Dictionary, global_slot_pos: Vector2) -> void:
 	_apply_dynamic_size(text_body, sock_count)
 	show()
 	
-	# 3. 向 LPC 请求更详细的装备词缀卡片 (如果有 cmd)
+	# 3. 启动 80ms 防抖计时器向服务端请求更详尽的卡片 (快速扫过路过格子不发包)
 	if not current_item_cmd.is_empty():
-		if Engine.has_singleton("NetworkClient") or has_node("/root/NetworkClient"):
-			var net = get_node_or_null("/root/NetworkClient")
-			if net and net.is_connected:
-				net.send_raw(current_item_cmd)
+		_pending_req_cmd = current_item_cmd
+		_pending_cache_key = cache_key
+		_start_debounce_request(current_item_cmd, cache_key)
 
 func _on_network_json(type: String, data: Variant) -> void:
-	if not visible:
-		return
-	# 收到 look 返回的 panel 卡片数据，原地刷新更详尽的暗黑2词缀
+	# 收到 look 返回的 panel 卡片数据，原地刷新更详尽的暗黑2词缀并存入短时缓存
 	if (type == "panel" or type == "actions") and data is Dictionary:
 		var desc = str(data.get("desc", ""))
 		if desc.is_empty():
 			return
 			
 		var img_info = AnsiHelper.extract_img_info(desc)
-		if not img_info.path.is_empty():
-			var large_tex = AnsiHelper.load_item_texture(img_info.path)
-			if large_tex:
-				item_icon.texture = large_tex
-				icon_frame.show()
-				
 		var net_sock = AnsiHelper.to_safe_int(img_info.get("sock"), 0)
 		var net_inlays = img_info.get("inlays", [])
-		var in_arr = net_inlays if (net_inlays is Array or net_inlays is PackedStringArray) else []
-		if net_sock > 0:
-			_ensure_tooltip_sockets()
-			if tooltip_sockets:
-				tooltip_sockets.set_sockets(net_sock, Array(in_arr))
-		_update_sockets_bar(net_sock, Array(in_arr))
-				
-		_apply_dynamic_size(AnsiHelper.to_bbcode(desc), net_sock)
+		var in_arr = Array(net_inlays if (net_inlays is Array or net_inlays is PackedStringArray) else [])
+		var large_icon = str(img_info.path)
+		
+		# 存入短时缓存 (优先使用当前展示的 key；若鼠标已移开，则使用在途发包 key)
+		var target_key = _current_displayed_key if not _current_displayed_key.is_empty() else _in_flight_cache_key
+		if target_key.is_empty() and not _pending_cache_key.is_empty():
+			target_key = _pending_cache_key
+			
+		if not target_key.is_empty():
+			_tooltip_cache[target_key] = {
+				"desc": desc,
+				"sock": net_sock,
+				"inlays": in_arr,
+				"large_icon": large_icon,
+				"timestamp": Time.get_ticks_msec()
+			}
+			if target_key == _in_flight_cache_key:
+				_in_flight_cache_key = ""
+			
+		# 仅当 Tooltip 仍然可见、且当前展示的物品与回包 key 匹配时才原地刷新
+		if visible and not _current_displayed_key.is_empty() and (_current_displayed_key == target_key or target_key.is_empty()):
+			if not large_icon.is_empty():
+				var large_tex = AnsiHelper.load_item_texture(large_icon)
+				if large_tex:
+					item_icon.texture = large_tex
+					icon_frame.show()
+					
+			if net_sock > 0:
+				_ensure_tooltip_sockets()
+				if tooltip_sockets:
+					tooltip_sockets.set_sockets(net_sock, in_arr)
+			_update_sockets_bar(net_sock, in_arr)
+					
+			_apply_dynamic_size(AnsiHelper.to_bbcode(desc), net_sock)
 
 func hide_tooltip() -> void:
+	_cancel_debounce()
 	hide()
 	current_item_cmd = ""
+	_current_displayed_key = ""
+	# 注意：保留 _in_flight_cache_key，网络在途迟到回包到达时仍能准确写入 60s 缓存
 	current_slot_pos = Vector2.ZERO
 	if tooltip_sockets:
 		tooltip_sockets.set_sockets(0, [])

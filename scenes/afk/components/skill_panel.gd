@@ -10,6 +10,9 @@ signal skill_learn_requested(skill_code: String)
 signal skill_reset_requested()
 signal skill_set_binding_requested(skill_code: String, slot_type: String)
 
+static func _safe_int(val: Variant, default_val: int = 0) -> int:
+	return AnsiHelper.to_safe_int(val, default_val)
+
 @onready var title_label: Label = %TitleLabel
 @onready var class_avatar: TextureRect = %ClassAvatar
 @onready var points_label: Label = %PointsLabel
@@ -86,7 +89,7 @@ func render_gskills_data(data: Dictionary) -> void:
 	_current_data = data
 	_current_class = str(data.get("class", "sor")).to_lower()
 	var c_name = str(data.get("class_name", "英雄"))
-	var pts = int(data.get("skill_points", 0))
+	var pts = _safe_int(data.get("skill_points"), 0)
 
 	# 1. 顶部标题与点数
 	if title_label:
@@ -128,9 +131,9 @@ func _render_tabs(tabs: Array) -> void:
 		var t = tabs[i]
 		if not (t is Dictionary):
 			continue
-		var page = int(t.get("page", i + 1))
+		var page = _safe_int(t.get("page"), i + 1)
 		var t_name = str(t.get("name", "系别 %d" % page))
-		var pts_spent = int(t.get("points_spent", 0))
+		var pts_spent = _safe_int(t.get("points_spent"), 0)
 
 		var btn = Button.new()
 		btn.text = "%s (%d)" % [t_name, pts_spent]
@@ -201,12 +204,12 @@ func _render_current_page_nodes() -> void:
 		var sk = all_skills[sk_code]
 		if not (sk is Dictionary):
 			continue
-		var page = int(sk.get("page", 1))
+		var page = _safe_int(sk.get("page"), 1)
 		if page != _current_page:
 			continue
 
-		var row = clampi(int(sk.get("row", 1)) - 1, 0, 5)
-		var col = clampi(int(sk.get("col", 1)) - 1, 0, 2)
+		var row = clampi(_safe_int(sk.get("row"), 1) - 1, 0, 5)
+		var col = clampi(_safe_int(sk.get("col"), 1) - 1, 0, 2)
 
 		var pos_x = GRID_START_X + col * GRID_STEP_X
 		var pos_y = GRID_START_Y + row * GRID_STEP_Y
@@ -228,8 +231,10 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 	root.size = Vector2(NODE_SIZE, NODE_SIZE)
 
 	var sk_code = str(sk.get("code", ""))
-	var cur_lvl = int(sk.get("cur_lvl", 0))
+	var cur_lvl = _safe_int(sk.get("cur_lvl"), 0)
+	var eff_lvl = _safe_int(sk.get("eff_lvl"), cur_lvl)
 	var is_learned = bool(sk.get("is_learned", false))
+	var is_usable = is_learned or eff_lvl > 0
 	var can_learn = bool(sk.get("can_learn", false))
 	var is_max = bool(sk.get("is_max", false))
 	var is_main = bool(sk.get("is_main", false))
@@ -252,7 +257,7 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 			icon_rect.texture = load(fallback_path)
 
 	# 状态色彩调制
-	if is_learned:
+	if is_usable:
 		icon_rect.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	elif can_learn:
 		icon_rect.modulate = Color(0.9, 0.9, 0.9, 0.9)
@@ -284,7 +289,7 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 	_node_selection_boxes[sk_code] = select_border
 
 	# 3. 未解锁小锁标记
-	if not is_learned and not prereq_ok:
+	if not is_usable and not prereq_ok:
 		var lock_lbl = Label.new()
 		lock_lbl.text = "🔒"
 		lock_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -322,20 +327,27 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 		root.add_child(bind_tag)
 
 	# 5. 右下角等级角标 (严格自适应宽度，内嵌于右下角，绝不溢出)
-	if is_learned:
+	if is_usable:
 		var lvl_lbl = Label.new()
-		var txt = "MAX" if is_max else "%d" % cur_lvl
+		var display_lvl = eff_lvl if eff_lvl > 0 else cur_lvl
+		var is_boosted = (eff_lvl > cur_lvl)
+		var txt = "MAX" if (is_max and not is_boosted) else "%d" % display_lvl
 		lvl_lbl.text = txt
-		var f_size = 9 if is_max else 10
+		var f_size = 9 if (is_max and not is_boosted) else 10
 		lvl_lbl.add_theme_font_size_override("font_size", f_size)
-		lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2) if is_max else Color.WHITE)
+		if is_boosted:
+			lvl_lbl.add_theme_color_override("font_color", Color(0.35, 0.78, 1.0)) # 暗黑2经典装备加成天蓝色
+		elif is_max:
+			lvl_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2)) # 投满金色
+		else:
+			lvl_lbl.add_theme_color_override("font_color", Color.WHITE)
 		lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lvl_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
-		# 测算文本实际宽度，精准靠右下对其，留 2px 边距
+		# 测算文本实际宽度，精准靠右下对齐，留 2px 边距
 		var font = ThemeDB.fallback_font
-		var str_w = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, f_size).x if font else (22.0 if is_max else 14.0)
-		var badge_w = clampf(str_w + 6.0, 16.0, 32.0)
+		var str_w = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, f_size).x if font else (22.0 if (is_max and not is_boosted) else 14.0)
+		var badge_w = clampf(str_w + 6.0, 16.0, 36.0)
 		var badge_h = 14.0
 		lvl_lbl.size = Vector2(badge_w, badge_h)
 		lvl_lbl.position = Vector2(NODE_SIZE - badge_w - 2.0, NODE_SIZE - badge_h - 2.0)
@@ -346,7 +358,12 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 		lvl_sb.border_width_top = 1
 		lvl_sb.border_width_right = 1
 		lvl_sb.border_width_bottom = 1
-		lvl_sb.border_color = Color(0.85, 0.72, 0.22, 0.9) if is_max else Color(0.5, 0.45, 0.35, 0.8)
+		if is_boosted:
+			lvl_sb.border_color = Color(0.2, 0.55, 0.85, 0.95) # 装备加成亮蓝边框
+		elif is_max:
+			lvl_sb.border_color = Color(0.85, 0.72, 0.22, 0.9) # 金色边框
+		else:
+			lvl_sb.border_color = Color(0.5, 0.45, 0.35, 0.8) # 铜色边框
 		lvl_sb.corner_radius_top_left = 2
 		lvl_sb.corner_radius_top_right = 2
 		lvl_sb.corner_radius_bottom_right = 2
@@ -375,13 +392,13 @@ func _create_skill_node_widget(sk: Dictionary) -> Control:
 			if event.button_index == MOUSE_BUTTON_LEFT:
 				# 左键单击选中
 				_select_and_highlight_skill(sk_code)
-				if event.double_click and is_learned and not is_passive:
+				if event.double_click and is_usable and not is_passive:
 					# 左键双击设为主攻
 					skill_set_binding_requested.emit(sk_code, "main")
 			elif event.button_index == MOUSE_BUTTON_RIGHT:
 				# 右键单击直接设为辅助技能
 				_select_and_highlight_skill(sk_code)
-				if is_learned and not is_passive:
+				if is_usable and not is_passive:
 					skill_set_binding_requested.emit(sk_code, "sub")
 	)
 	root.add_child(click_btn)
@@ -447,26 +464,26 @@ func _on_draw_flow_lines() -> void:
 		var sk = all_skills[sk_code]
 		if not (sk is Dictionary):
 			continue
-		if int(sk.get("page", 1)) != _current_page:
+		if _safe_int(sk.get("page"), 1) != _current_page:
 			continue
 
 		var reqs = sk.get("req_skills", [])
 		if not (reqs is Array) or reqs.is_empty():
 			continue
 
-		var to_row = clampi(int(sk.get("row", 1)) - 1, 0, 5)
-		var to_col = clampi(int(sk.get("col", 1)) - 1, 0, 2)
+		var to_row = clampi(_safe_int(sk.get("row"), 1) - 1, 0, 5)
+		var to_col = clampi(_safe_int(sk.get("col"), 1) - 1, 0, 2)
 		var to_pos = Vector2(GRID_START_X + to_col * GRID_STEP_X + half_node, GRID_START_Y + to_row * GRID_STEP_Y + half_node)
 
 		for req_code in reqs:
 			var req_sk = all_skills.get(req_code)
 			if not (req_sk is Dictionary):
 				continue
-			if int(req_sk.get("page", 1)) != _current_page:
+			if _safe_int(req_sk.get("page"), 1) != _current_page:
 				continue
 
-			var from_row = clampi(int(req_sk.get("row", 1)) - 1, 0, 5)
-			var from_col = clampi(int(req_sk.get("col", 1)) - 1, 0, 2)
+			var from_row = clampi(_safe_int(req_sk.get("row"), 1) - 1, 0, 5)
+			var from_col = clampi(_safe_int(req_sk.get("col"), 1) - 1, 0, 2)
 			var from_pos = Vector2(GRID_START_X + from_col * GRID_STEP_X + half_node, GRID_START_Y + from_row * GRID_STEP_Y + half_node)
 
 			var is_req_learned = bool(req_sk.get("is_learned", false))
@@ -505,9 +522,9 @@ func _render_skill_details(sk_code: String) -> void:
 	var sk_name = str(sk.get("name", "技能"))
 	var is_passive = bool(sk.get("is_passive", false))
 	var is_spell = bool(sk.get("is_spell", false))
-	var req_lvl = int(sk.get("req_level", 1))
-	var cur_lvl = int(sk.get("cur_lvl", 0))
-	var eff_lvl = int(sk.get("eff_lvl", cur_lvl))
+	var req_lvl = _safe_int(sk.get("req_level"), 1)
+	var cur_lvl = _safe_int(sk.get("cur_lvl"), 0)
+	var eff_lvl = _safe_int(sk.get("eff_lvl"), cur_lvl)
 	var mana_cost = float(sk.get("mana_cost", 0))
 	var intro = str(sk.get("intro", ""))
 	var cur_desc = str(sk.get("cur_desc", ""))
@@ -515,23 +532,78 @@ func _render_skill_details(sk_code: String) -> void:
 	var is_learned = bool(sk.get("is_learned", false))
 	var is_main = bool(sk.get("is_main", false))
 	var is_sub = bool(sk.get("is_sub", false))
+	var is_usable = is_learned or eff_lvl > 0
 
 	if detail_name:
 		detail_name.text = sk_name
 	if detail_code:
 		detail_code.text = "(%s)" % sk_code
 
-	# 技能类型标签
+	# 技能复合特性标签解析 (类型 / 范围 / 元素 / 驱动机制)
 	if detail_type_tag:
+		var target_type = str(sk.get("target_type", "")).to_lower()
+		var damage_type = str(sk.get("damage_type", "")).to_lower()
+		var cast_driver = str(sk.get("cast_driver", "")).to_lower()
+		var hits = _safe_int(sk.get("hits"), 1)
+		var targets = _safe_int(sk.get("targets"), 1)
+		var chain_count = _safe_int(sk.get("chain_count"), 0)
+
+		var tags: Array[String] = []
+
+		# 1. 基础驱动门类
 		if is_passive:
-			detail_type_tag.text = "【被动技能】"
-			detail_type_tag.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+			tags.append("被动技能")
+		elif target_type == "buff":
+			var sk_cls = str(sk.get("class", ""))
+			if sk_cls == "pal":
+				tags.append("增益光环")
+			elif sk_cls == "bar":
+				tags.append("增益战吼")
+			else:
+				tags.append("增益状态")
+		elif target_type == "curse":
+			tags.append("诅咒弱化")
+		elif target_type == "summon":
+			tags.append("召唤法术")
 		elif is_spell:
-			detail_type_tag.text = "【法术技能】"
-			detail_type_tag.add_theme_color_override("font_color", Color(1.0, 0.7, 0.4))
+			tags.append("法术技能")
 		else:
-			detail_type_tag.text = "【战斗技能】"
-			detail_type_tag.add_theme_color_override("font_color", Color(1.0, 0.5, 0.5))
+			tags.append("战斗技能")
+
+		# 2. 作用范围与打击段数 (仅对主动输出与控制技能呈现)
+		if not is_passive and target_type not in ["buff", "summon", "curse"]:
+			if target_type == "combo" or hits > 1:
+				tags.append("多段技能 (%d连击)" % hits if hits > 1 else "多段技能")
+			elif target_type == "aoe" or targets > 1:
+				tags.append("AOE技能 (%d目标)" % targets if targets > 1 else "AOE技能")
+			elif target_type == "chain" or chain_count > 0:
+				tags.append("连锁技能 (%d跳)" % (chain_count if chain_count > 0 else 5))
+			else:
+				tags.append("单体技能")
+
+		# 3. 伤害属性
+		if not is_passive and target_type not in ["buff", "summon", "curse"]:
+			match damage_type:
+				"phys": tags.append("物理")
+				"light": tags.append("闪电")
+				"fire": tags.append("火焰")
+				"cold": tags.append("冰霜")
+				"poison": tags.append("毒素")
+				"magic": tags.append("纯魔法")
+				"elemental": tags.append("全元素")
+				"phys_fire": tags.append("物理/火焰")
+
+		detail_type_tag.text = "【 %s 】" % " · ".join(tags)
+		detail_type_tag.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+		if is_passive:
+			detail_type_tag.add_theme_color_override("font_color", Color(0.5, 0.8, 1.0))
+		elif is_spell or target_type in ["curse", "summon"]:
+			detail_type_tag.add_theme_color_override("font_color", Color(1.0, 0.75, 0.35))
+		elif target_type == "buff":
+			detail_type_tag.add_theme_color_override("font_color", Color(0.4, 0.9, 0.6))
+		else:
+			detail_type_tag.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
 
 	if detail_icon:
 		var icon_path = str(sk.get("icon_file", ""))
@@ -543,11 +615,17 @@ func _render_skill_details(sk_code: String) -> void:
 	if detail_cur_lvl:
 		if cur_lvl > 0:
 			if eff_lvl > cur_lvl:
-				detail_cur_lvl.text = "当前等级: %d/20 (+%d)" % [cur_lvl, eff_lvl - cur_lvl]
+				detail_cur_lvl.text = "当前等级: %d/20 (+%d 装备)" % [cur_lvl, eff_lvl - cur_lvl]
+				detail_cur_lvl.add_theme_color_override("font_color", Color(0.35, 0.78, 1.0))
 			else:
 				detail_cur_lvl.text = "当前等级: %d/20" % cur_lvl
+				detail_cur_lvl.remove_theme_color_override("font_color")
+		elif eff_lvl > 0:
+			detail_cur_lvl.text = "当前等级: 0/20 (+%d 装备赋予)" % eff_lvl
+			detail_cur_lvl.add_theme_color_override("font_color", Color(0.35, 0.78, 1.0))
 		else:
 			detail_cur_lvl.text = "当前等级: 未领悟"
+			detail_cur_lvl.remove_theme_color_override("font_color")
 
 	if detail_mana_cost:
 		if mana_cost > 0:
@@ -561,7 +639,7 @@ func _render_skill_details(sk_code: String) -> void:
 		detail_intro.visible = not intro.is_empty()
 
 	if detail_cur_desc:
-		detail_cur_desc.text = cur_desc if cur_lvl > 0 else "尚未领悟此技能。"
+		detail_cur_desc.text = cur_desc if is_usable else "尚未领悟此技能。"
 
 	if detail_next_desc:
 		if next_desc.is_empty() or cur_lvl >= 20:
@@ -593,7 +671,7 @@ func _render_skill_details(sk_code: String) -> void:
 		if passive_hint_label: passive_hint_label.visible = false
 		if btn_set_main:
 			btn_set_main.visible = true
-			btn_set_main.disabled = not is_learned
+			btn_set_main.disabled = not is_usable
 			btn_set_main.text = "已设为主攻 (左键)" if is_main else "设为主攻 (左键 / 双击)"
 			if is_main:
 				var m_style = StyleBoxFlat.new()
@@ -613,7 +691,7 @@ func _render_skill_details(sk_code: String) -> void:
 
 		if btn_set_sub:
 			btn_set_sub.visible = true
-			btn_set_sub.disabled = not is_learned
+			btn_set_sub.disabled = not is_usable
 			btn_set_sub.text = "已设为辅助 (右键)" if is_sub else "设为辅助 (右键点击)"
 			if is_sub:
 				var s_style = StyleBoxFlat.new()
@@ -638,10 +716,10 @@ func _select_default_skill() -> void:
 	var first_code = ""
 	for k in all_skills.keys():
 		var sk = all_skills[k]
-		if int(sk.get("page", 1)) == _current_page:
+		if _safe_int(sk.get("page"), 1) == _current_page:
 			if first_code.is_empty():
 				first_code = k
-			if int(sk.get("cur_lvl", 0)) > 0:
+			if _safe_int(sk.get("cur_lvl"), 0) > 0:
 				_select_and_highlight_skill(k)
 				return
 	if not first_code.is_empty():

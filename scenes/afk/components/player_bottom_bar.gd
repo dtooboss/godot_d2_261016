@@ -64,6 +64,13 @@ func update_mp(cur: int, maximum: int) -> void:
 	if mp_bar:
 		mp_bar.set_stat(cur, maximum)
 
+## 触发法力球施法脉冲激荡（出招翻涌与高光）
+func pulse_mp() -> void:
+	if not mp_bar:
+		mp_bar = get_node_or_null("%MPBar")
+	if mp_bar and mp_bar.has_method("pulse_cast"):
+		mp_bar.pulse_cast()
+
 ## 纯后端数据驱动更新经验条 (零前端死算，完美适配满级 MAX 与后端直出百分比)
 func update_exp(cur: int, maximum: int, pct_override: float = -1.0) -> void:
 	current_exp = cur

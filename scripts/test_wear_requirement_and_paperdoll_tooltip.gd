@@ -70,7 +70,7 @@ func _ready() -> void:
 	# -------------------------------------------------------------
 	# 模拟鼠标移动进入衣服槽位
 	char_panel.item_hovered.emit(test_gscore["equips"]["armor"], slot_armor.global_position)
-	await get_tree().process_frame
+	await get_tree().create_timer(0.1).timeout
 	
 	assert(tooltip.visible == true, "鼠标悬停后 Tooltip 必须可见！")
 	assert(tooltip.current_item_cmd == "look /d/d2/obj/armor#8888", "Tooltip 必须携带正确的 cmd 指令！")
@@ -119,9 +119,12 @@ func _ready() -> void:
 	# 4. 截图并优雅退出
 	# -------------------------------------------------------------
 	await get_tree().create_timer(0.2).timeout
-	var img = get_viewport().get_texture().get_image()
-	img.save_png("res://test_wear_req_and_paperdoll_tooltip.png")
-	print("[Test] 走查截图已保存至 res://test_wear_req_and_paperdoll_tooltip.png")
+	var vp = get_viewport()
+	if vp and vp.get_texture():
+		var img = vp.get_texture().get_image()
+		if img:
+			img.save_png("res://test_wear_req_and_paperdoll_tooltip.png")
+			print("[Test] 走查截图已保存至 res://test_wear_req_and_paperdoll_tooltip.png")
 	
 	print("=== 全部 5 项穿戴需求校验与纸娃娃 Tooltip 核心验证 100% 通过！ ===")
 	get_tree().quit(0)

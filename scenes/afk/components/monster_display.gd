@@ -33,8 +33,9 @@ var breath_amp_x: float = 0.015
 var base_scale: float = 1.0
 var is_breathing_enabled: bool = true
 
-# 受击硬直动效 Tween
+# 受击硬直与血条动效 Tween
 var _hit_tween: Tween = null
+var _hp_tween: Tween = null
 var _is_in_hit_anim: bool = false
 
 # DoT 状态机
@@ -154,6 +155,86 @@ func bind_monster_data(mon_data: Dictionary) -> void:
 	# 3. 渲染真实血条数值
 	update_hp(cur_hp, max_hp)
 
+	# 4. 渲染 Debuff 减益徽章 (伤害加深、衰老、降低抗性、剧毒等)
+	var dbs = mon_data.get("debuffs", [])
+	update_debuffs(dbs if dbs is Array else [])
+
+var _last_debuff_sig: String = ""
+
+## 实时更新怪物减益徽章 (Debuff Badges)
+func update_debuffs(debuff_list: Array) -> void:
+	_render_debuffs(debuff_list)
+
+## 渲染怪物减益徽章 (Debuff Badges)
+func _render_debuffs(debuff_list: Array) -> void:
+	var sig: String = ""
+	for item in debuff_list:
+		if item is Dictionary:
+			sig += str(item.get("id", "")) + ","
+	if sig == _last_debuff_sig:
+		return
+	_last_debuff_sig = sig
+
+	var debuff_box = get_node_or_null("NamePanel/VBox/DebuffBox")
+	if not debuff_box:
+		var vbox = get_node_or_null("NamePanel/VBox")
+		if vbox:
+			debuff_box = HBoxContainer.new()
+			debuff_box.name = "DebuffBox"
+			debuff_box.alignment = BoxContainer.ALIGNMENT_CENTER
+			debuff_box.add_theme_constant_override("separation", 3)
+			vbox.add_child(debuff_box)
+			vbox.move_child(debuff_box, 1)
+
+	if not debuff_box: return
+
+	for child in debuff_box.get_children():
+		child.queue_free()
+
+	if debuff_list.is_empty():
+		debuff_box.visible = false
+		return
+
+	debuff_box.visible = true
+	for item in debuff_list:
+		if not item is Dictionary: continue
+		var did = str(item.get("id", ""))
+		var dname = str(item.get("name", "减益"))
+		var dcol_hex = str(item.get("color", "#ff4444"))
+		var dcol = Color.from_string(dcol_hex, Color(1.0, 0.27, 0.27))
+		
+		var badge = PanelContainer.new()
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color(dcol.r * 0.2, dcol.g * 0.2, dcol.b * 0.2, 0.9)
+		sb.border_width_left = 1
+		sb.border_width_top = 1
+		sb.border_width_right = 1
+		sb.border_width_bottom = 1
+		sb.border_color = dcol
+		sb.corner_radius_top_left = 2
+		sb.corner_radius_top_right = 2
+		sb.corner_radius_bottom_right = 2
+		sb.corner_radius_bottom_left = 2
+		sb.content_margin_left = 3
+		sb.content_margin_right = 3
+		sb.content_margin_top = 0
+		sb.content_margin_bottom = 0
+		badge.add_theme_stylebox_override("panel", sb)
+
+		var lbl = Label.new()
+		var icon_sym = "🩸"
+		if did == "decrepify": icon_sym = "⌛"
+		elif did == "lower_resist": icon_sym = "✨"
+		elif did == "poison": icon_sym = "🧪"
+		elif did == "chill": icon_sym = "❄"
+		elif did == "clay_slow": icon_sym = "🗿"
+		lbl.text = "%s %s" % [icon_sym, dname]
+		lbl.add_theme_font_size_override("font_size", 9)
+		lbl.add_theme_color_override("font_color", dcol)
+		badge.add_child(lbl)
+		badge.tooltip_text = "减益状态: %s" % dname
+		debuff_box.add_child(badge)
+
 ## 更新当前生命值
 func update_hp(hp: int, m_hp: int = -1) -> void:
 	cur_hp = max(0, hp)
@@ -164,9 +245,10 @@ func update_hp(hp: int, m_hp: int = -1) -> void:
 		hp_label.text = "%d / %d" % [cur_hp, max_hp]
 	if hp_bar:
 		var pct = (float(cur_hp) / float(max_hp)) * 100.0
-		# 平滑插值更新
-		var tw = create_tween()
-		tw.tween_property(hp_bar, "value", pct, 0.15).set_ease(Tween.EASE_OUT)
+		if _hp_tween and _hp_tween.is_valid():
+			_hp_tween.kill()
+		_hp_tween = create_tween().bind_node(self)
+		_hp_tween.tween_property(hp_bar, "value", pct, 0.12).set_ease(Tween.EASE_OUT)
 
 ## 触发真实受击动效 (受击硬直 + 红色闪白 + 弹性恢复)
 func play_hit_reaction(is_crit: bool = false) -> void:
@@ -206,32 +288,36 @@ func _get_current_state_color() -> Color:
 		return Color(0.55, 0.85, 1.0, 1.0) # 冰霜幽蓝
 	return Color.WHITE
 
-## 升级 6 系暗黑原版元素飘字引擎 (含暴击大字与 AoE 扩散)
-func spawn_damage(amount: int, elem_type: String = "物理", is_crit: bool = false, is_aoe: bool = false) -> void:
+## 升级 6 系暗黑原版元素飘字引擎 (含暴击大字与 AoE 扩散，支持自身高光大字与队友小字半透分流)
+func spawn_damage(amount: int, elem_type: String = "物理", is_crit: bool = false, is_aoe: bool = false, is_attacker_me: bool = true) -> void:
 	if not damage_container: return
 	
 	var lbl = Label.new()
-	var font_sz = 18
+	# 自己打的数字大 (20/28px)；其他人打的数字小 (13/17px)
+	var font_sz = 20 if is_attacker_me else 13
 	
 	# 特殊战况文本判定
 	if amount == 0:
 		lbl.text = "MISS"
-		lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.8))
+		lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 0.9 if is_attacker_me else 0.55))
 	elif amount == -1:
 		lbl.text = "DODGE"
-		lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0, 0.9))
+		lbl.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0, 0.9 if is_attacker_me else 0.55))
 	elif amount == -2:
 		lbl.text = "BLOCK"
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 0.9))
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4, 0.9 if is_attacker_me else 0.55))
 	else:
 		lbl.text = ("-" + str(amount)) if not is_crit else ("💥 -" + str(amount) + "!")
 		var color = _get_element_color(elem_type, is_crit)
+		if not is_attacker_me:
+			color.a = 0.65 # 他人伤害淡化半透
 		lbl.add_theme_color_override("font_color", color)
-		if is_crit: font_sz = 26
+		if is_crit:
+			font_sz = 28 if is_attacker_me else 17
 		
-	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1.0))
-	lbl.add_theme_constant_override("shadow_offset_x", 2)
-	lbl.add_theme_constant_override("shadow_offset_y", 2)
+	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1.0 if is_attacker_me else 0.5))
+	lbl.add_theme_constant_override("shadow_offset_x", 2 if is_attacker_me else 1)
+	lbl.add_theme_constant_override("shadow_offset_y", 2 if is_attacker_me else 1)
 	lbl.add_theme_font_size_override("font_size", font_sz)
 	
 	# 飘字生成位置与抛物线轨迹
@@ -242,16 +328,22 @@ func spawn_damage(amount: int, elem_type: String = "物理", is_crit: bool = fal
 		var dir = -1.0 if randf() < 0.5 else 1.0
 		start_x = dir * randf_range(30.0, 70.0)
 		target_x = start_x + dir * randf_range(20.0, 50.0)
+	elif is_attacker_me:
+		# 自身伤害：核心中轴上抛
+		start_x = randf_range(-20.0, 20.0)
+		target_x = start_x + randf_range(-10.0, 10.0)
 	else:
-		start_x = randf_range(-25.0, 25.0)
-		target_x = start_x + randf_range(-15.0, 15.0)
+		# 队友伤害：略微向外散开
+		var dir = -1.0 if randf() < 0.5 else 1.0
+		start_x = dir * randf_range(15.0, 45.0)
+		target_x = start_x + dir * randf_range(10.0, 25.0)
 		
 	lbl.position = Vector2(start_x, -50.0)
 	damage_container.add_child(lbl)
 	
 	var tw = create_tween().bind_node(lbl)
-	var dur = 0.7 if is_crit else 0.55
-	var rise_h = 55.0 if is_crit else 40.0
+	var dur = (0.7 if is_crit else 0.55) if is_attacker_me else (0.6 if is_crit else 0.45)
+	var rise_h = (55.0 if is_crit else 42.0) if is_attacker_me else (38.0 if is_crit else 28.0)
 	
 	tw.tween_property(lbl, "position:y", lbl.position.y - rise_h, dur).set_ease(Tween.EASE_OUT)
 	tw.parallel().tween_property(lbl, "position:x", target_x, dur).set_ease(Tween.EASE_OUT)

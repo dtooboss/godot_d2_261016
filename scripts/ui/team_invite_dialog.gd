@@ -51,6 +51,9 @@ func show_invite(raw_desc: String, accept_cmd: String, reject_cmd: String = "loo
 	remaining_time = timeout_sec
 	is_active = true
 	
+	if title_label:
+		title_label.text = "❖ 组队邀请 ❖"
+		
 	# 文本富文本化与去除原生控制码
 	var bbcode_desc = AnsiHelperScript.to_bbcode(raw_desc).strip_edges()
 	if desc_label:
@@ -58,6 +61,31 @@ func show_invite(raw_desc: String, accept_cmd: String, reject_cmd: String = "loo
 		
 	if hint_label:
 		hint_label.text = "组队后同场景并肩作战将共享战斗经验与掉落加成。\n（不同难度英雄无法组队）"
+		
+	_update_timer_display()
+	visible = true
+	move_to_front()
+
+## 弹出以物换物交易专属邀请弹窗
+func show_trade_invite(from_name_or_desc: String, accept_cmd: String, reject_cmd: String = "", timeout_sec: float = 15.0) -> void:
+	current_accept_cmd = accept_cmd.strip_edges()
+	current_reject_cmd = reject_cmd.strip_edges()
+	remaining_time = timeout_sec
+	is_active = true
+	
+	if title_label:
+		title_label.text = "❖ 交易请求 ❖"
+		
+	var display_text = from_name_or_desc
+	if not ("想要与你进行" in display_text or "交易" in display_text):
+		display_text = "%s 想要与你进行以物换物交易。" % from_name_or_desc
+		
+	var bbcode_desc = AnsiHelperScript.to_bbcode(display_text).strip_edges()
+	if desc_label:
+		desc_label.text = "[center]" + bbcode_desc + "[/center]"
+		
+	if hint_label:
+		hint_label.text = "以物换物：双方锁定确认后，物品将原子级安全交换。\n（交易仅限安全主城进行）"
 		
 	_update_timer_display()
 	visible = true

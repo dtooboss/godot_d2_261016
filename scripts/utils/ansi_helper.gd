@@ -271,6 +271,62 @@ static func load_item_texture(raw_path: String) -> Texture2D:
 			var r_path = "res://assets/items/misc/rune/%s_rune.lowend.png" % r_name
 			if ResourceLoader.exists(r_path):
 				return load(r_path)
+
+	# 2.6 任务道具/身体器官代码智能别名容错
+	var quest_aliases: Dictionary = {
+		"jfd": "jade_figurine",
+		"gold_bird": "gold_bird",
+		"golden_bird": "gold_bird",
+		"hfh": "hellforge_hammer",
+		"hellforge": "hellforge_hammer",
+		"qey": "khalims_eye",
+		"qhr": "khalims_heart",
+		"qbr": "khalims_brain",
+		"qfl": "khalims_flail",
+		"qf2": "khalims_will",
+		"ear": "ear",
+		"player_ear": "ear",
+		"eye": "eye",
+		"brain": "brain",
+		"heart": "heart",
+		"horn": "horn",
+		"gbd": "gidbinn",
+		"vip": "staff_of_kings",
+		"vpa": "viper_amulet",
+		"msf": "horadric_staff",
+		"box": "horadric_cube",
+		"cube": "horadric_cube",
+		"leg": "wirts_leg",
+		"bkd": "lam_esens_tome",
+		"bks": "book_of_skill",
+		"mss": "mephisto_soulstone",
+		"malus": "horadric_malus",
+		"pk1": "key_of_terror",
+		"pk2": "key_of_hate",
+		"pk3": "key_of_destruction",
+		"key_of_terror": "key_of_terror",
+		"key_of_hate": "key_of_hate",
+		"key_of_destruction": "key_of_destruction",
+		"dhn": "diablos_horn",
+		"bey": "khalims_eye",
+		"mbr": "khalims_brain",
+		"std": "flag",
+		"key": "mephisto_key",
+		"mephisto_key": "mephisto_key",
+		"skeleton_key": "skeleton_key"
+	}
+	var q_code = clean.get_file().to_lower().replace(".png", "").replace(".lowend", "")
+	if quest_aliases.has(q_code):
+		var mapped_name = quest_aliases[q_code]
+		var q_paths: Array[String] = [
+			"res://assets/items/quest/" + mapped_name + ".png",
+			"res://assets/items/misc/quest/" + mapped_name + ".png",
+			"res://assets/items/misc/quest/" + mapped_name + ".lowend.png",
+			"res://assets/items/misc/body_part/" + mapped_name + ".png"
+		]
+		for qp in q_paths:
+			if ResourceLoader.exists(qp):
+				return load(qp)
 	
 	# 3. 构造直接尝试候选列表
 	var candidates: Array[String] = [

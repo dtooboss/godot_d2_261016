@@ -1,0 +1,348 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scenes/afk/components/hook_setting_panel.gd" id="1"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/style_dark_panel.tres" id="2"]
+[ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="3"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_modal_bg"]
+bg_color = Color(0.1, 0.1, 0.12, 0.98)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.4, 0.35, 0.25, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+shadow_color = Color(0, 0, 0, 0.8)
+shadow_size = 8
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_slot"]
+bg_color = Color(0.06, 0.06, 0.08, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.3, 0.28, 0.24, 0.8)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="HookSettingPanel" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1")
+
+[node name="Panel" type="PanelContainer" parent="."]
+custom_minimum_size = Vector2(380, 360)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -190.0
+offset_top = -180.0
+offset_right = 190.0
+offset_bottom = 180.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_modal_bg")
+
+[node name="Margin" type="MarginContainer" parent="Panel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="Panel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Panel/Margin/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.95, 0.82, 0.45, 1)
+theme_override_font_sizes/font_size = 14
+text = "❖ 挂机与推图设置 ❖"
+
+[node name="BtnClose" type="Button" parent="Panel/Margin/VBox/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 2
+theme_override_styles/normal = ExtResource("3")
+text = "×"
+
+[node name="HSeparator" type="HSeparator" parent="Panel/Margin/VBox"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ProgressionSection" type="VBoxContainer" parent="Panel/Margin/VBox/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ChkAutoNext" type="CheckBox" parent="Panel/Margin/VBox/Content/ProgressionSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.88, 0.82, 1)
+theme_override_colors/font_pressed_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 13
+text = " 自动推图模式"
+
+[node name="DescAutoNext" type="Label" parent="Panel/Margin/VBox/Content/ProgressionSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.65, 0.65, 1)
+theme_override_font_sizes/font_size = 11
+text = "击杀当前关卡领主后自动前往下一关卡。\n组队模式下仅由队长设置生效。"
+
+[node name="HSeparator2" type="HSeparator" parent="Panel/Margin/VBox/Content"]
+layout_mode = 2
+
+[node name="PotionSection" type="VBoxContainer" parent="Panel/Margin/VBox/Content"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="LabelPotion" type="Label" parent="Panel/Margin/VBox/Content/PotionSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.88, 0.82, 1)
+theme_override_font_sizes/font_size = 12
+text = "优先使用药水 (拖入 4 个快捷药水槽位)"
+
+[node name="DescPotion" type="Label" parent="Panel/Margin/VBox/Content/PotionSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 10
+text = "从背包拖入药水放入槽位，右键点击可清空槽位 (从左至右优先)"
+
+[node name="PotionSlotsContainer" type="HBoxContainer" parent="Panel/Margin/VBox/Content/PotionSection"]
+unique_name_in_owner = true
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 12
+
+[node name="Slot1" type="Panel" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot")
+
+[node name="LabelNum" type="Label" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot1"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 2.0
+offset_right = -4.0
+offset_bottom = 16.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.8)
+theme_override_font_sizes/font_size = 10
+text = "1"
+horizontal_alignment = 2
+
+[node name="Icon" type="TextureRect" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot1"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -17.0
+offset_top = -17.0
+offset_right = 17.0
+offset_bottom = 17.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Slot2" type="Panel" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot")
+
+[node name="LabelNum" type="Label" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot2"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 2.0
+offset_right = -4.0
+offset_bottom = 16.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.8)
+theme_override_font_sizes/font_size = 10
+text = "2"
+horizontal_alignment = 2
+
+[node name="Icon" type="TextureRect" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot2"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -17.0
+offset_top = -17.0
+offset_right = 17.0
+offset_bottom = 17.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Slot3" type="Panel" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot")
+
+[node name="LabelNum" type="Label" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot3"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 2.0
+offset_right = -4.0
+offset_bottom = 16.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.8)
+theme_override_font_sizes/font_size = 10
+text = "3"
+horizontal_alignment = 2
+
+[node name="Icon" type="TextureRect" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot3"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -17.0
+offset_top = -17.0
+offset_right = 17.0
+offset_bottom = 17.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Slot4" type="Panel" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer"]
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+mouse_filter = 1
+theme_override_styles/panel = SubResource("StyleBoxFlat_slot")
+
+[node name="LabelNum" type="Label" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot4"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -16.0
+offset_top = 2.0
+offset_right = -4.0
+offset_bottom = 16.0
+grow_horizontal = 0
+theme_override_colors/font_color = Color(0.5, 0.5, 0.5, 0.8)
+theme_override_font_sizes/font_size = 10
+text = "4"
+horizontal_alignment = 2
+
+[node name="Icon" type="TextureRect" parent="Panel/Margin/VBox/Content/PotionSection/PotionSlotsContainer/Slot4"]
+custom_minimum_size = Vector2(34, 34)
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -17.0
+offset_top = -17.0
+offset_right = 17.0
+offset_bottom = 17.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HSeparator3" type="HSeparator" parent="Panel/Margin/VBox/Content"]
+layout_mode = 2
+
+[node name="ThresholdSection" type="VBoxContainer" parent="Panel/Margin/VBox/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ThresholdHeader" type="HBoxContainer" parent="Panel/Margin/VBox/Content/ThresholdSection"]
+layout_mode = 2
+
+[node name="LabelThresholdTitle" type="Label" parent="Panel/Margin/VBox/Content/ThresholdSection/ThresholdHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.9, 0.88, 0.82, 1)
+theme_override_font_sizes/font_size = 12
+text = "自动喝药阈值"
+
+[node name="LabelPotionPct" type="Label" parent="Panel/Margin/VBox/Content/ThresholdSection/ThresholdHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.5, 1)
+theme_override_font_sizes/font_size = 12
+text = "低于 50% 时喝药"
+
+[node name="SliderPotionPct" type="HSlider" parent="Panel/Margin/VBox/Content/ThresholdSection"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 10.0
+max_value = 90.0
+step = 5.0
+value = 50.0
+
+[node name="DescThreshold" type="Label" parent="Panel/Margin/VBox/Content/ThresholdSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.6, 0.6, 1)
+theme_override_font_sizes/font_size = 10
+text = "当生命值或法力值低于此百分比时，自动使用对应药水"
+
+[node name="Spacer" type="Control" parent="Panel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Footer" type="HBoxContainer" parent="Panel/Margin/VBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="BtnSave" type="Button" parent="Panel/Margin/VBox/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "保存设置"
+
+[node name="BtnCancel" type="Button" parent="Panel/Margin/VBox/Footer"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 28)
+layout_mode = 2
+theme_override_font_sizes/font_size = 12
+text = "取消"

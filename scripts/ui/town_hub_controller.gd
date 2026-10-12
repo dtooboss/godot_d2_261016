@@ -63,9 +63,14 @@ var is_sidebar_expanded: bool = true
 @onready var char_info_panel: Control = get_node_or_null("CharacterInfoPanel")
 @onready var skill_panel: AFK_SkillPanel = get_node_or_null("SkillPanel")
 @onready var pickup_setting_panel: Control = get_node_or_null("PickupSettingPanel")
+@onready var hook_setting_panel: Control = get_node_or_null("HookSettingPanel")
 var cube_panel: AFK_CubePanel = null
 const GShopPanelScript = preload("res://scenes/afk/components/gshop_panel.gd")
 var gshop_panel: Control = null
+const TradePanelScript = preload("res://scripts/ui/trade_panel.gd")
+var trade_panel: Control = null
+const StashPanelScript = preload("res://scenes/afk/components/stash_panel.gd")
+var stash_panel: Control = null
 
 # 城镇主题自适应
 const ACT_THEMES = {
@@ -126,7 +131,7 @@ func _ready() -> void:
 	if GameState.current_town_name != "":
 		init_town = GameState.current_town_name
 	elif GameState.current_stage_info is Dictionary and GameState.current_stage_info.has("act"):
-		var act_num = int(GameState.current_stage_info.get("act", 1))
+		var act_num = _safe_int(GameState.current_stage_info.get("act"), 1)
 		if act_num == 1: init_town = "罗格营地"
 		elif act_num == 2: init_town = "鲁高因"
 		elif act_num == 3: init_town = "库拉斯特"
@@ -144,7 +149,10 @@ func _ready() -> void:
 	if not NetworkClient.is_connected and NetworkClient.has_signal("connected_to_server"):
 		NetworkClient.connected_to_server.connect(_request_lpc_sync, CONNECT_ONE_SHOT)
 
-	_show_toast("已进驻安全大本营！这里可自由组队、交易与聊天")
+	if GameState.death_countdown_remain > 0.0:
+		_show_toast("你身负重伤已被护送回大本营休整，正在调息复苏中...")
+	else:
+		_show_toast("已进驻安全大本营！这里可自由组队、交易与聊天")
 
 func _request_lpc_sync() -> void:
 	if NetworkClient.is_connected:
@@ -161,17 +169,23 @@ func _init_player_ui() -> void:
 		var cname = str(cdata.get("name", "英雄"))
 		var cls = str(cdata.get("class", "sor"))
 		var cls_name = str(cdata.get("class_name", GameState.get_class_display_name(cls)))
-		var level = int(cdata.get("level", 1))
+		var level = _safe_int(cdata.get("level"), 1)
 		
-		# 难度判定
-		var raw_diff = str(cdata.get("difficulty", GameState.selected_difficulty)).to_lower()
-		current_player_diff = parse_difficulty_code(raw_diff)
+		# 难度判定：优先采用 GameState.selected_difficulty，若为空才从 cdata 读取
+		var target_diff = GameState.selected_difficulty
+		if target_diff.is_empty():
+			target_diff = str(cdata.get("difficulty", "normal")).to_lower()
+		current_player_diff = parse_difficulty_code(target_diff)
+		cdata["difficulty"] = current_player_diff
+		GameState.selected_difficulty = current_player_diff
 		
+		var diff_info = get_difficulty_display(current_player_diff)
+		var diff_name = str(diff_info.get("name", "普通"))
 		lbl_char_name.text = cname
-		lbl_char_class.text = "Lv.%d %s" % [level, cls_name]
+		lbl_char_class.text = "Lv.%d %s [%s]" % [level, cls_name, diff_name]
 		avatar_icon.texture = get_hero_avatar_icon(cls)
 		
-		gold_amount = int(cdata.get("gold", 0))
+		gold_amount = _safe_int(cdata.get("gold"), 0)
 		lbl_gold.text = "🪙 金币: %d" % gold_amount
 		if inventory_panel and inventory_panel.has_method("update_gold"):
 			inventory_panel.update_gold(gold_amount)
@@ -179,7 +193,7 @@ func _init_player_ui() -> void:
 func _connect_signals() -> void:
 	# 出征与大本营设施
 	btn_go_battle.pressed.connect(_on_enter_battle_pressed)
-	btn_stash.pressed.connect(func(): NetworkClient.send_raw("open stash"))
+	btn_stash.pressed.connect(_toggle_stash_panel)
 	btn_waypoint.pressed.connect(_toggle_world_map)
 	btn_cube.pressed.connect(_toggle_cube_panel)
 	
@@ -219,14 +233,14 @@ func _connect_signals() -> void:
 		if inventory_panel.little_pocket_panel:
 			inventory_panel.little_pocket_panel.visibility_changed.connect(func():
 				if inventory_panel.little_pocket_panel.visible:
-					# 单窗口互斥: 打开小口袋时，自动互斥关闭纸娃娃、魔盒与随身商店
-					if char_info_panel and char_info_panel.visible:
-						if char_info_panel.has_method("close"): char_info_panel.close()
-						else: char_info_panel.hide()
-					if cube_panel and cube_panel.visible:
-						cube_panel.visible = false
-					if gshop_panel and gshop_panel.visible:
-						gshop_panel.close()
+					# 单窗口互斥: 打开小口袋时，自动互斥关闭纸娃娃、魔盒、工坊与随身商店等
+					_close_all_popups_except(inventory_panel.little_pocket_panel)
+			)
+		if inventory_panel.socketing_workbench_panel:
+			inventory_panel.socketing_workbench_panel.visibility_changed.connect(func():
+				if inventory_panel.socketing_workbench_panel.visible:
+					# 单窗口互斥: 打开工坊时，自动互斥关闭纸娃娃、魔盒、小口袋与随身商店等
+					_close_all_popups_except(inventory_panel.socketing_workbench_panel)
 			)
 
 	# 控制矩阵快捷菜单 (背包下方挂机房同款)
@@ -238,7 +252,7 @@ func _connect_signals() -> void:
 		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
 		control_matrix.btn_shop_clicked.connect(_toggle_gshop_panel)
 		control_matrix.btn_reset_points_clicked.connect(func(): NetworkClient.send_raw("reset"))
-		control_matrix.btn_hook_clicked.connect(func(): _show_toast("当前在安全大本营，出征野外后可开启挂机战斗！"))
+		control_matrix.btn_hook_clicked.connect(_toggle_hook_setting)
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_login)
 	
 	# 初始化大地图选点出征
@@ -314,9 +328,52 @@ func _connect_signals() -> void:
 	if pickup_setting_panel:
 		pickup_setting_panel.hide()
 
+	# 初始化以物换物交易面板
+	if trade_panel == null:
+		trade_panel = TradePanelScript.new()
+		trade_panel.z_index = 160
+		add_child(trade_panel)
+		trade_panel.visible = false
+		trade_panel.item_hovered.connect(func(item_data, pos):
+			if item_tooltip:
+				item_tooltip.show_item(item_data, pos)
+		)
+		trade_panel.item_unhovered.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
+		trade_panel.trade_cancelled.connect(func():
+			_show_toast("交易已取消并关闭")
+		)
+
+	# 初始化赫拉迪姆大储物箱面板
+	if stash_panel == null:
+		stash_panel = StashPanelScript.new()
+		stash_panel.z_index = 150
+		add_child(stash_panel)
+		stash_panel.visible = false
+		stash_panel.action_requested.connect(func(cmd: String):
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw(cmd)
+		)
+		stash_panel.item_hovered.connect(func(item_data, pos):
+			if item_tooltip:
+				item_tooltip.show_item(item_data, pos)
+		)
+		stash_panel.item_unhovered.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
+		stash_panel.closed.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
+
 	# 网络帧监听
 	NetworkClient.json_frame_received.connect(_on_json_frame_received)
 	NetworkClient.text_received.connect(_on_text_received)
+	if NetworkClient.has_signal("reconnected_to_server") and not NetworkClient.reconnected_to_server.is_connected(_on_reconnected_to_server):
+		NetworkClient.reconnected_to_server.connect(_on_reconnected_to_server)
 
 func _setup_toggle_button_style() -> void:
 	if not btn_toggle_sidebar:
@@ -358,11 +415,15 @@ func set_sidebar_expanded(expand: bool) -> void:
 			item_tooltip.hide_tooltip()
 
 	_update_toggle_button_position()
-	# 魔盒与商店浮窗跟随侧栏开合重新贴位
+	# 魔盒、商店、交易与储物箱浮窗跟随侧栏开合重新贴位
 	if cube_panel and cube_panel.visible:
 		_position_cube_panel()
 	if gshop_panel and gshop_panel.visible:
 		_position_gshop_panel()
+	if trade_panel and trade_panel.visible:
+		_position_trade_panel()
+	if stash_panel and stash_panel.visible:
+		_position_stash_panel()
 
 func _update_toggle_button_position() -> void:
 	if not btn_toggle_sidebar:
@@ -388,11 +449,53 @@ func _close_all_popups_except(keep_node: Node = null) -> void:
 		else: skill_panel.hide()
 	if cube_panel and cube_panel != keep_node: cube_panel.visible = false
 	if gshop_panel and gshop_panel != keep_node: gshop_panel.close()
+	if trade_panel and trade_panel != keep_node: trade_panel.visible = false
+	if stash_panel and stash_panel != keep_node: stash_panel.visible = false
 	if world_map and world_map != keep_node: world_map.hide()
 	if pickup_setting_panel and pickup_setting_panel != keep_node:
 		if pickup_setting_panel.has_method("hide_panel"): pickup_setting_panel.hide_panel()
 		else: pickup_setting_panel.hide()
+	if hook_setting_panel and hook_setting_panel != keep_node:
+		if hook_setting_panel.has_method("hide_panel"): hook_setting_panel.hide_panel()
+		else: hook_setting_panel.hide()
+	if inventory_panel:
+		if inventory_panel.little_pocket_panel and inventory_panel.little_pocket_panel != keep_node:
+			inventory_panel.little_pocket_panel.hide()
+		if inventory_panel.socketing_workbench_panel and inventory_panel.socketing_workbench_panel != keep_node:
+			inventory_panel.socketing_workbench_panel.close()
 	if item_tooltip: item_tooltip.hide_tooltip()
+
+func _position_stash_panel() -> void:
+	if stash_panel == null or not stash_panel.visible: return
+	var right_margin: float = 336.0 if is_sidebar_expanded else 16.0
+	var avail_w: float = float(size.x) - right_margin
+	var x: float = max(10.0, (avail_w - float(stash_panel.size.x)) * 0.5)
+	# 底部操作栏避让防护 (底栏约 72px，预留 75px 安全边界，严禁下端越界)
+	var bottom_margin: float = 75.0
+	var max_y: float = max(10.0, float(size.y) - bottom_margin - float(stash_panel.size.y))
+	var y: float = clamp((float(size.y) - bottom_margin - float(stash_panel.size.y)) * 0.5, 10.0, max_y)
+	stash_panel.position = Vector2(x, y)
+
+func _toggle_stash_panel() -> void:
+	if not stash_panel: return
+	if stash_panel.visible:
+		stash_panel.visible = false
+	else:
+		if not is_sidebar_expanded:
+			set_sidebar_expanded(true)
+		_close_all_popups_except(stash_panel)
+		stash_panel.visible = true
+		_position_stash_panel()
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("stash")
+
+func _position_trade_panel() -> void:
+	if trade_panel == null or not trade_panel.visible: return
+	var right_margin: float = 336.0 if is_sidebar_expanded else 16.0
+	var avail_w: float = float(size.x) - right_margin
+	var x: float = max(10.0, (avail_w - float(trade_panel.size.x)) * 0.5)
+	var y: float = max(10.0, (float(size.y) - float(trade_panel.size.y)) * 0.5)
+	trade_panel.position = Vector2(x, y)
 
 ## 开关右侧边栏背包 (完全由 LPC gbag 协议驱动)
 func _toggle_inventory() -> void:
@@ -410,6 +513,12 @@ func _toggle_world_map() -> void:
 		if NetworkClient.is_connected:
 			NetworkClient.send_raw("stage")
 		world_map.z_index = 200
+		world_map.reset_user_selection()
+		var target_act = current_act_key if current_act_key != "" else GameState.current_location_act
+		if target_act != "" and world_map.ACTS_CONFIG.has(target_act):
+			world_map.switch_act(target_act, false)
+		else:
+			world_map._auto_locate_act()
 		world_map.update_progress(GameState.player_max_stage)
 		world_map.show()
 
@@ -418,7 +527,7 @@ func _on_map_spot_selected(arg1: Variant, arg2: Variant = null) -> void:
 	var stage_id: int = 1
 	var s_name: String = ""
 	if arg1 is Dictionary:
-		stage_id = int(arg1.get("stage_id", 1))
+		stage_id = _safe_int(arg1.get("stage_id"), 1)
 		s_name = str(arg1.get("name", ""))
 	elif arg1 is int or arg1 is float:
 		stage_id = int(arg1)
@@ -545,21 +654,40 @@ func _toggle_pickup_setting() -> void:
 		if NetworkClient.is_connected:
 			NetworkClient.send_raw("gfenjie get")
 
+## 开关挂机设置面板
+func _toggle_hook_setting() -> void:
+	if not hook_setting_panel: return
+	if hook_setting_panel.visible:
+		if hook_setting_panel.has_method("hide_panel"): hook_setting_panel.hide_panel()
+		else: hook_setting_panel.hide()
+	else:
+		_close_all_popups_except(hook_setting_panel)
+		if hook_setting_panel.has_method("show_panel"): hook_setting_panel.show_panel()
+		else: hook_setting_panel.show()
+
 ## 处理服务端推送的各类数据包
 func _on_json_frame_received(type: String, data: Variant) -> void:
 	# 0. LPC 专属大地图关卡进度帧 (stage_info)
 	if type == "stage_info" and data is Dictionary:
-		var max_s = int(data.get("max_stage", 0))
+		var max_s = _safe_int(data.get("max_stage"), 0)
 		GameState.player_max_stage = max_s
+		GameState.team_bottleneck_name = str(data.get("bottleneck_name", ""))
 		if data.has("worlds") and data["worlds"] is Array:
 			GameState.unlocked_worlds = data["worlds"]
 		if data.has("selected_stage"):
-			GameState.selected_stage_id = int(data.get("selected_stage", 1))
+			GameState.selected_stage_id = _safe_int(data.get("selected_stage"), 1)
 		if data.has("selected_act"):
 			GameState.selected_act = str(data.get("selected_act", "act1"))
-		print("[TownHub] 收到关卡进度更新: max_stage = %d, selected = %d (%s), worlds = %d" % [max_s, GameState.selected_stage_id, GameState.selected_act, GameState.unlocked_worlds.size()])
+		if data.has("stage_alvls") and data["stage_alvls"] is Dictionary:
+			GameState.stage_alvls = data["stage_alvls"]
+		print("[TownHub] 收到关卡进度更新: max_stage = %d, selected = %d (%s), worlds = %d, alvls = %d" % [max_s, GameState.selected_stage_id, GameState.selected_act, GameState.unlocked_worlds.size(), GameState.stage_alvls.size()])
 		if world_map:
 			world_map.update_progress(max_s)
+
+	# 0.1 LPC 专属挂机与推图设置帧 (afk_settings)
+	elif type == "afk_settings" and data is Dictionary:
+		if hook_setting_panel and hook_setting_panel.has_method("_apply_settings_from_server"):
+			hook_setting_panel._apply_settings_from_server(data)
 
 	# 1. 房间标题 (罗格营地 / 鲁高因 等)
 	elif type == "title":
@@ -574,9 +702,11 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 	elif type == "stage_leave":
 		var t_name = "罗格营地"
 		var act_id = "act1"
+		var revive_rem = 0.0
 		if data is Dictionary:
 			t_name = str(data.get("town_name", data.get("town", "罗格营地")))
 			act_id = str(data.get("act_id", "act1"))
+			revive_rem = float(data.get("revive_remain", 0.0))
 		elif data is String:
 			for part in data.split(","):
 				if part.begins_with("town_name:"):
@@ -585,9 +715,19 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 					t_name = part.substr(5)
 				elif part.begins_with("act_id:"):
 					act_id = part.substr(7)
+				elif part.begins_with("revive_remain:"):
+					revive_rem = float(part.substr(14))
 		GameState.current_town_name = t_name
 		GameState.current_location_act = act_id
+		GameState.death_countdown_remain = revive_rem
 		_update_town_display(t_name)
+		if revive_rem > 0.0:
+			_show_toast("你身负重伤已被护送回大本营【%s】调息！" % t_name)
+
+	# 1.2 倒地调息满状态复苏帧 (player_revive)
+	elif type == "player_revive":
+		GameState.death_countdown_remain = 0.0
+		_show_toast("灵魂重聚完成，满状态复苏！")
 		
 	# 2. 房间内的出口与同场景英雄列表 (LPC 在 exits 帧下发 type == "hero" 的真实玩家)
 	elif type == "exits":
@@ -610,9 +750,29 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 		if NetworkClient.is_connected:
 			_request_refresh_room()
 			
-	# 4. 角色血量/金币/等级/经验
+	# 3.8 难度切换监听 (difficulty_change)
+	elif type == "difficulty_change":
+		if data is Dictionary and data.has("difficulty"):
+			var new_diff = parse_difficulty_code(str(data["difficulty"]))
+			current_player_diff = new_diff
+			GameState.selected_difficulty = new_diff
+			if GameState.selected_character is Dictionary:
+				GameState.selected_character["difficulty"] = new_diff
+			_init_player_ui()
+			_request_refresh_room()
+			var d_info = get_difficulty_display(new_diff)
+			_show_toast("当前世界难度已切换为: " + str(d_info.get("name", "普通")))
+
+	# 4. 角色血量/金币/等级/经验/难度
 	elif type == "status" or type == "charhp":
 		if data is Dictionary:
+			if data.has("difficulty"):
+				var new_diff = parse_difficulty_code(str(data["difficulty"]))
+				current_player_diff = new_diff
+				GameState.selected_difficulty = new_diff
+				if GameState.selected_character is Dictionary:
+					GameState.selected_character["difficulty"] = new_diff
+				_init_player_ui()
 			if data.has("gold"):
 				gold_amount = int(data["gold"])
 				lbl_gold.text = "🪙 金币: %d" % gold_amount
@@ -699,6 +859,7 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 		var msg = str(data.get("msg", "恭喜升级！"))
 		_show_toast("★★★ %s ★★★" % msg)
 		_update_topbar_level(n_lvl)
+		NetworkClient.send_raw("gscore")
 
 	# 12. LPC 专属技能树结构化帧 (gskills)
 	elif type == "gskills" and data is Dictionary:
@@ -709,6 +870,22 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 	elif type == "gcube" and data is Dictionary:
 		if cube_panel and cube_panel.has_method("render_gcube_data"):
 			cube_panel.render_gcube_data(data)
+
+	# 13.6 LPC 专属通行证大储物箱帧 (gstash: 纯后端数据驱动)
+	elif type == "gstash" and data is Dictionary:
+		if stash_panel:
+			if not stash_panel.visible:
+				_close_all_popups_except(stash_panel)
+				stash_panel.visible = true
+				if not is_sidebar_expanded:
+					set_sidebar_expanded(true)
+				_position_stash_panel()
+			stash_panel.render_gstash_data(data)
+
+	# 13.5 LPC 专属凹槽工坊帧 (gsocket)
+	elif type == "gsocket" and data is Dictionary:
+		if inventory_panel and inventory_panel.socketing_workbench_panel:
+			inventory_panel.socketing_workbench_panel.render_workbench_data(data)
 
 	# 14. LPC 专属拾取与分解配置帧 (gfenjie)
 	elif type == "gfenjie" and data is Dictionary:
@@ -741,6 +918,66 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 		if not msg.is_empty():
 			_show_toast(msg)
 
+	# 17. LPC 背包消息与满包警告反馈帧 (gbag_msg)
+	elif type == "gbag_msg" and data is Dictionary:
+		var msg = str(data.get("msg", ""))
+		if not msg.is_empty():
+			_show_toast(msg)
+
+	# 18. LPC 专属以物换物交易开启帧 (trade_open)
+	elif type == "trade_open" and data is Dictionary:
+		var p_id = str(data.get("partner_id", ""))
+		var p_name = str(data.get("partner_name", "英雄"))
+		_close_all_popups_except(trade_panel)
+		if not is_sidebar_expanded:
+			set_sidebar_expanded(true)
+		if trade_panel:
+			trade_panel.open_trade(p_id, p_name)
+			_position_trade_panel()
+		_show_toast("已开启与【%s】的以物换物交易！" % p_name)
+
+	# 19. LPC 专属交易数据镜像同步帧 (trade_sync)
+	elif type == "trade_sync" and data is Dictionary:
+		if trade_panel:
+			if not trade_panel.visible:
+				_close_all_popups_except(trade_panel)
+				trade_panel.visible = true
+				_position_trade_panel()
+			trade_panel.update_trade_sync(data)
+
+	# 20. LPC 专属交易成功完成帧 (trade_complete)
+	elif type == "trade_complete" and data is Dictionary:
+		var msg = str(data.get("msg", "交易成功！双方物品已安全交换。"))
+		_show_toast("★★★ %s ★★★" % msg)
+		if trade_panel:
+			trade_panel.visible = false
+		if item_tooltip:
+			item_tooltip.hide_tooltip()
+
+	# 21. LPC 专属交易关闭/取消帧 (trade_closed)
+	elif type == "trade_closed" and data is Dictionary:
+		var reason = str(data.get("reason", "交易已取消。"))
+		_show_toast(reason)
+		if trade_panel:
+			trade_panel.visible = false
+		if item_tooltip:
+			item_tooltip.hide_tooltip()
+
+	# 22. LPC 交易请求与拒绝提示帧
+	elif type == "trade_request_sent" and data is Dictionary:
+		var t_name = str(data.get("target_name", ""))
+		_show_toast("已向【%s】发起交易请求，等待对方接受..." % t_name)
+	elif type == "trade_declined" and data is Dictionary:
+		var p_name = str(data.get("partner_name", ""))
+		_show_toast("【%s】拒绝了你的交易请求。" % p_name)
+
+	# 23. LPC 专属以物换物交易邀请专属帧 (trade_invite)
+	elif type == "trade_invite" and data is Dictionary:
+		var from_id = str(data.get("from_id", ""))
+		var from_name = str(data.get("from_name", "某位英雄"))
+		if team_invite_dialog:
+			team_invite_dialog.show_trade_invite(from_name, "gtrade accept " + from_id, "gtrade decline " + from_id)
+
 func _safe_int(val: Variant, default_val: int = 0) -> int:
 	if val == null: return default_val
 	if val is int: return val
@@ -754,14 +991,17 @@ func _handle_panel_frame(data: Dictionary) -> void:
 	var raw_actions = data.get("actions", [])
 	var actions: Array = raw_actions if raw_actions is Array else []
 	
-	# 判定是否为组队邀请
+	# 判定是否为组队或交易邀请
 	var is_team_invite = false
+	var is_trade_invite = false
 	var accept_cmd = ""
 	var reject_cmd = "look"
 	
 	var clean_desc = AnsiHelper.to_plain_text(desc)
 	if "邀请你加入" in clean_desc or "组队" in clean_desc:
 		is_team_invite = true
+	elif "交易" in clean_desc or "以物换物" in clean_desc:
+		is_trade_invite = true
 		
 	for act in actions:
 		if act is Dictionary:
@@ -772,12 +1012,21 @@ func _handle_panel_frame(data: Dictionary) -> void:
 			if cmd.begins_with("team with "):
 				is_team_invite = true
 				accept_cmd = cmd
-			elif clean_lbl == "接受" and accept_cmd.is_empty():
+			elif cmd.begins_with("gtrade accept "):
+				is_trade_invite = true
 				accept_cmd = cmd
-			elif clean_lbl == "拒绝":
+			elif cmd.begins_with("gtrade decline "):
+				reject_cmd = cmd
+			elif (clean_lbl == "接受" or clean_lbl == "接受交易") and accept_cmd.is_empty():
+				accept_cmd = cmd
+			elif clean_lbl == "拒绝" or clean_lbl == "拒绝交易":
 				reject_cmd = cmd
 				
-	if is_team_invite and not accept_cmd.is_empty():
+	if is_trade_invite and not accept_cmd.is_empty():
+		if team_invite_dialog:
+			team_invite_dialog.show_trade_invite(desc, accept_cmd, reject_cmd)
+		return
+	elif is_team_invite and not accept_cmd.is_empty():
 		if team_invite_dialog:
 			team_invite_dialog.show_invite(desc, accept_cmd, reject_cmd)
 		return
@@ -831,6 +1080,9 @@ func _update_town_display(plain_name: String) -> void:
 		var act_info = ACT_THEMES[act_key]
 		if act_info.name in current_room_name:
 			current_act_key = act_key
+			GameState.current_town_name = act_info.name
+			GameState.current_location_act = act_key
+			GameState.selected_act = act_key
 			bg_rect.color = act_info.bg
 			camp_title.text = act_info.title
 			camp_desc.text = act_info.desc
@@ -849,6 +1101,7 @@ func _request_refresh_room() -> void:
 func _parse_room_players(objects_list: Array) -> void:
 	room_players.clear()
 	var my_name = lbl_char_name.text.strip_edges()
+	var seen_ids = {}
 	
 	for obj in objects_list:
 		if not obj is Dictionary: continue
@@ -871,6 +1124,10 @@ func _parse_room_players(objects_list: Array) -> void:
 			
 		# 提取英雄属性 (支持显式 class 与从 icon 反推职业)
 		var p_id = str(obj.get("id", clean_name)).to_lower()
+		if seen_ids.has(p_id):
+			continue
+		seen_ids[p_id] = true
+		
 		var p_cls = str(obj.get("class", obj.get("d2_class", ""))).to_lower()
 		var p_icon = str(obj.get("icon", "")).to_lower()
 		if p_cls.is_empty() or p_cls == "null":
@@ -881,7 +1138,7 @@ func _parse_room_players(objects_list: Array) -> void:
 			elif "druid" in p_icon or "dru" in p_icon: p_cls = "dru"
 			elif "assassin" in p_icon or "asn" in p_icon: p_cls = "asn"
 			else: p_cls = "bar"
-		var p_lvl = int(obj.get("level", 1))
+		var p_lvl = _safe_int(obj.get("level"), 1)
 		var p_rating = str(obj.get("rating", "1.0k"))
 		var raw_diff = str(obj.get("diff", obj.get("difficulty", "normal"))).to_lower()
 		var p_diff = parse_difficulty_code(raw_diff)
@@ -894,6 +1151,10 @@ func _parse_room_players(objects_list: Array) -> void:
 			elif (esc + "[1;33m") in raw_name or (esc + "[33m") in raw_name:
 				p_diff = "nm"
 				
+		var is_myself = (clean_name == my_name or p_id == GameState.player_id.to_lower())
+		if is_myself and current_player_diff != "":
+			p_diff = current_player_diff
+
 		room_players.append({
 			"id": p_id,
 			"name": clean_name,
@@ -902,7 +1163,7 @@ func _parse_room_players(objects_list: Array) -> void:
 			"rating": p_rating,
 			"diff": p_diff,
 			"cmd": ocmd,
-			"is_self": (clean_name == my_name)
+			"is_self": is_myself
 		})
 		
 	_render_player_cards()
@@ -921,6 +1182,7 @@ func _set_diff_filter(filter: String) -> void:
 ## 渲染同场景英雄长列表 (带滑动条)
 func _render_player_cards() -> void:
 	for c in player_list_vbox.get_children():
+		player_list_vbox.remove_child(c)
 		c.queue_free()
 		
 	var displayed_count = 0
@@ -990,7 +1252,7 @@ func _create_hero_card(p: Dictionary) -> PanelContainer:
 	vbox_info.add_child(row2)
 	
 	var rating_lbl = Label.new()
-	rating_lbl.text = "⚔ " + str(p["rating"])
+	rating_lbl.text = "⚔ " + str(p.get("rating", "1.0k"))
 	rating_lbl.add_theme_font_size_override("font_size", 11)
 	rating_lbl.add_theme_color_override("font_color", Color(1.0, 0.8, 0.2)) # 暗金
 	row2.add_child(rating_lbl)
@@ -1009,19 +1271,24 @@ func _create_hero_card(p: Dictionary) -> PanelContainer:
 		btn_box.alignment = BoxContainer.ALIGNMENT_CENTER
 		hbox.add_child(btn_box)
 		
-		# 组队按钮状态 (同难度可点；若已为队友则队长显示踢出，队员显示已入队)
-		var is_same_diff = (p["diff"] == current_player_diff)
+		# 组队按钮状态 (同难度可点；若已为队友则队长显示踢出，队员显示已入队；已有队伍则不可用)
+		var is_same_diff = (p.get("diff", "") == current_player_diff)
 		var is_teammate = false
 		for tm in GameState.current_team_members:
 			if tm is Dictionary and str(tm.get("id", "")) == p["id"]:
 				is_teammate = true
 				break
-				
+
+		var target_has_team = bool(p.get("has_team", false)) or is_teammate
+		var my_in_team = GameState.is_in_team
+		var my_is_leader = GameState.is_team_leader()
+		var team_is_full = (GameState.current_team_members.size() >= 5)
+
 		var btn_team = Button.new()
-		btn_team.custom_minimum_size = Vector2(46, 26)
-		
+		btn_team.custom_minimum_size = Vector2(50, 26)
+
 		if is_teammate:
-			if GameState.is_team_leader():
+			if my_is_leader:
 				btn_team.text = "踢出"
 				btn_team.add_theme_color_override("font_color", Color(0.95, 0.4, 0.4))
 				btn_team.pressed.connect(func():
@@ -1032,11 +1299,36 @@ func _create_hero_card(p: Dictionary) -> PanelContainer:
 				btn_team.text = "已入队"
 				btn_team.disabled = true
 				btn_team.add_theme_color_override("font_color", Color(0.4, 0.8, 1.0))
-		else:
+				btn_team.tooltip_text = "该英雄是你的队伍成员"
+		elif target_has_team:
+			# 核心：目标英雄已有其他队伍，按钮不可用置灰，杜绝其他玩家误点
+			btn_team.text = "已有队伍"
+			btn_team.disabled = true
+			btn_team.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
+			btn_team.tooltip_text = "该英雄已加入其他队伍，不可发起组队"
+		elif my_in_team and not my_is_leader:
+			# 自身已在队伍中但不是队长，无法邀请新队员
 			btn_team.text = "组队"
-			btn_team.disabled = not is_same_diff
-			if not is_same_diff:
-				btn_team.tooltip_text = "不同难度英雄不可组队"
+			btn_team.disabled = true
+			btn_team.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
+			btn_team.tooltip_text = "只有队伍领袖才可邀请新队员入队"
+		elif my_is_leader and team_is_full:
+			# 队伍已达 5 人上限
+			btn_team.text = "队满"
+			btn_team.disabled = true
+			btn_team.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
+			btn_team.tooltip_text = "当前队伍人数已达上限 (5/5)"
+		elif not is_same_diff:
+			btn_team.text = "组队"
+			btn_team.disabled = true
+			btn_team.add_theme_color_override("font_color", Color(0.65, 0.65, 0.65))
+			btn_team.tooltip_text = "不同难度英雄不可组队"
+		else:
+			# 双方均自由且同难度，正常发起组队邀请
+			btn_team.text = "组队"
+			btn_team.disabled = false
+			btn_team.add_theme_color_override("font_color", Color(0.3, 0.9, 0.4))
+			btn_team.tooltip_text = "发起组队邀请"
 			btn_team.pressed.connect(func():
 				_show_toast("已向【%s】发起组队邀请！" % p["name"])
 				NetworkClient.send_raw("team with " + p["id"])
@@ -1048,8 +1340,8 @@ func _create_hero_card(p: Dictionary) -> PanelContainer:
 		btn_trade.text = "交易"
 		btn_trade.custom_minimum_size = Vector2(46, 26)
 		btn_trade.pressed.connect(func():
-			_show_toast("发起交易需双方并肩作战累计交易点！")
-			NetworkClient.send_raw("trade " + p["id"])
+			_show_toast("已向【%s】发起交易请求！" % p["name"])
+			NetworkClient.send_raw("gtrade " + p["id"])
 		)
 		btn_box.add_child(btn_trade)
 		
@@ -1171,6 +1463,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			_toggle_pickup_setting()
 			return
+		elif event.keycode == KEY_A:
+			get_viewport().set_input_as_handled()
+			_toggle_hook_setting()
+			return
 		elif event.keycode == KEY_F:
 			get_viewport().set_input_as_handled()
 			_on_enter_battle_pressed()
@@ -1204,7 +1500,7 @@ func _on_enter_battle_pressed() -> void:
 		
 	_show_toast("正在带领队伍出征，前往野外专属挂机位面...")
 	if NetworkClient.is_connected:
-		var st_id = int(GameState.current_stage_info.get("stage", 1))
+		var st_id = _safe_int(GameState.current_stage_info.get("stage"), 1)
 		# 若当前处于鲁高因及后续大幕，但关卡尚未跟进，自动对齐所属大幕首关
 		if current_act_key == "act2" and st_id < 15:
 			st_id = 15
@@ -1261,9 +1557,26 @@ func _render_leaderboard_text(raw_text: String) -> void:
 
 ## 退出到登录页
 func _on_exit_to_login() -> void:
-	NetworkClient.send_raw("quit")
-	NetworkClient.disconnect_server()
-	get_tree().change_scene_to_file("res://scenes/login/login_screen.tscn")
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("quit")
+		var tree = get_tree()
+		if tree and is_inside_tree():
+			await tree.create_timer(0.15).timeout
+		NetworkClient.disconnect_server(true)
+	GameState.reset_on_logout()
+	var tree = get_tree()
+	if tree and is_inside_tree():
+		tree.change_scene_to_file("res://scenes/login/login_screen.tscn")
+
+func _on_reconnected_to_server() -> void:
+	print("[TownHub] ★★★ 断线重连成功，正在同步主城大本营状态 ★★★")
+	_show_toast("已重新连接战网！正在同步主城状态...")
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("look")
+		NetworkClient.send_raw("gscore")
+		NetworkClient.send_raw("stage")
+		if inventory_panel:
+			NetworkClient.send_raw("gbag %d" % inventory_panel.current_page)
 
 ## Toast 飘字提醒
 func _show_toast(msg: String) -> void:
@@ -1304,10 +1617,10 @@ func parse_difficulty_code(diff: String) -> String:
 ## 辅助：难度展示信息
 func get_difficulty_display(diff_code: String) -> Dictionary:
 	if diff_code == "hell":
-		return { "label": "【地狱】", "color": Color(1.0, 0.35, 0.35) }
+		return { "label": "【地狱】", "name": "地狱", "color": Color(1.0, 0.35, 0.35) }
 	elif diff_code == "nm":
-		return { "label": "【噩梦】", "color": Color(1.0, 0.85, 0.1) }
-	return { "label": "【普通】", "color": Color(0.85, 0.9, 0.95) }
+		return { "label": "【噩梦】", "name": "噩梦", "color": Color(1.0, 0.85, 0.1) }
+	return { "label": "【普通】", "name": "普通", "color": Color(0.85, 0.9, 0.95) }
 
 ## 辅助：纯后端数据驱动更新顶栏等级显示
 func _update_topbar_level(new_lvl: int) -> void:

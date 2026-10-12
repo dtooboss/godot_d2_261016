@@ -63,6 +63,7 @@ signal team_updated(members: Array)
 var current_team_members: Array = []
 var current_team_leader: String = ""
 var is_in_team: bool = false
+var team_bottleneck_name: String = ""
 ## --- 关卡与世界三权分立状态 (选点、物理所在、解锁大幕) ---
 # 1. 选点状态 (玩家在大地图或挂机房指定的关卡与所属幕)
 var selected_stage_id: int = 1
@@ -77,10 +78,22 @@ var current_location_act: String = "act1"
 var unlocked_worlds: Array = []
 var player_max_stage: int = 0
 
+# 4. 关卡权威区域等级字典 (由后端 stage_info 动态下发，形如 {"1": 36, "2": 37, ...})
+var stage_alvls: Dictionary = {}
+
+# 5. 跨场景死亡休整倒计时剩余秒数 (用于队长护送倒地队员回城时在营地无缝接续倒计时)
+var death_countdown_remain: float = 0.0
+
+func get_stage_alvl(stage_id: int, fallback_lvl: int = 1) -> int:
+	var key = str(stage_id)
+	if stage_alvls.has(key):
+		return AnsiHelper.to_safe_int(stage_alvls[key], fallback_lvl)
+	return fallback_lvl
+
 var player_level: int:
 	get:
 		if selected_character and not selected_character.is_empty():
-			return int(selected_character.get("level", 1))
+			return AnsiHelper.to_safe_int(selected_character.get("level"), 1)
 		return 1
 
 func update_team_data(leader_id: String, members: Array) -> void:
@@ -93,6 +106,7 @@ func clear_team() -> void:
 	current_team_leader = ""
 	current_team_members.clear()
 	is_in_team = false
+	team_bottleneck_name = ""
 	team_updated.emit([])
 
 func get_my_character_id() -> String:
@@ -105,3 +119,20 @@ func is_team_leader() -> bool:
 	if not is_in_team: return true
 	var my_id = get_my_character_id()
 	return my_id == current_team_leader
+
+## 登出时复位全局角色、队伍与临时状态
+func reset_on_logout() -> void:
+	selected_character.clear()
+	selected_difficulty = "normal"
+	clear_team()
+	team_bottleneck_name = ""
+	chat_history.clear()
+	latest_chat_snippet = "暂无新的传音消息"
+	unlocked_worlds.clear()
+	player_max_stage = 0
+	current_town_name = "罗格营地"
+	current_location_act = "act1"
+	selected_stage_id = 1
+	selected_act = "act1"
+	current_stage_info = { "stage": 1, "name": "鲜血荒地", "act": 1 }
+	stage_alvls.clear()

@@ -108,7 +108,7 @@ func refresh_cards() -> void:
 		
 		# 左侧背景横幅
 		var tex_rect = TextureRect.new()
-		tex_rect.custom_minimum_size = Vector2(320, 100)
+		tex_rect.custom_minimum_size = Vector2(200, 95)
 		tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		if ResourceLoader.exists(w["bg"]):

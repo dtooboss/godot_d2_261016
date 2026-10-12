@@ -30,6 +30,8 @@ const CHANNEL_CMDS = {
 }
 
 func _ready() -> void:
+	z_as_relative = false
+	z_index = 80
 	_init_channel_select()
 	_connect_signals()
 	_load_initial_history()
@@ -92,18 +94,18 @@ func set_expanded(expanded: bool) -> void:
 	if is_expanded:
 		custom_minimum_size = Vector2(320, 140)
 		offset_left = 12.0
-		offset_top = -325.0
+		offset_top = -285.0
 		offset_right = 12.0 + 320.0
-		offset_bottom = -185.0
+		offset_bottom = -145.0
 		if chat_input:
 			# 展开后平滑聚焦到输入栏末尾
 			chat_input.grab_focus()
 	else:
 		custom_minimum_size = Vector2(280, 24)
 		offset_left = 12.0
-		offset_top = -209.0
+		offset_top = -169.0
 		offset_right = 12.0 + 280.0
-		offset_bottom = -185.0
+		offset_bottom = -145.0
 		if chat_input and chat_input.has_focus():
 			chat_input.release_focus()
 

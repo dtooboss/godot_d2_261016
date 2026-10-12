@@ -23,7 +23,7 @@ func setup(data: Dictionary, selected: bool = false) -> void:
 	var char_name = str(data.get("name", "未命名"))
 	var cls = str(data.get("class", "sor"))
 	var cls_display = str(data.get("class_name", GameState.get_class_display_name(cls)))
-	var level = int(data.get("level", 1))
+	var level = AnsiHelper.to_safe_int(data.get("level"), 1)
 	
 	# 设置文本
 	name_label.text = char_name

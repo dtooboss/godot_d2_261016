@@ -3,6 +3,7 @@ class_name AFK_MainHUD
 
 const MonsterDisplayScene = preload("res://scenes/afk/components/monster_display.tscn")
 const CombatFXManagerScene = preload("res://scenes/afk/components/combat_fx_manager.gd")
+const LootDropFxScript = preload("res://scenes/afk/components/loot_drop_fx.gd")
 
 # 战场多点位动态槽位池配置 (对齐 AFKandia 10 席网格容量，前排 5、后排 5 错落分布)
 const SLOT_POSITIONS = [
@@ -11,8 +12,8 @@ const SLOT_POSITIONS = [
 	Vector2(0.50, 0.58), # Slot 2: 正前中锋 (Boss在场时让出)
 	Vector2(0.66, 0.56), # Slot 3: 右前锋
 	Vector2(0.82, 0.54), # Slot 4: 远右前
-	Vector2(0.12, 0.42), # Slot 5: 远左后
-	Vector2(0.28, 0.40), # Slot 6: 左后
+	Vector2(0.12, 0.46), # Slot 5: 远左后 (微调避让左上Party HUD)
+	Vector2(0.28, 0.44), # Slot 6: 左后 (微调避让左上Party HUD)
 	Vector2(0.50, 0.38), # Slot 7: 正后中位
 	Vector2(0.72, 0.40), # Slot 8: 右后
 	Vector2(0.88, 0.42), # Slot 9: 远右后
@@ -35,6 +36,7 @@ const BOSS_SLOT = Vector2(0.50, 0.46) # Boss 居中王座
 @onready var item_tooltip: Control = %ItemTooltip
 @onready var world_map: AFK_WorldMap = %WorldMap
 @onready var pickup_setting_panel: Control = %PickupSettingPanel
+@onready var hook_setting_panel: Control = %HookSettingPanel
 @onready var salvage_dialog: Control = %SalvageUniqueConfirmDialog
 @onready var skill_panel: AFK_SkillPanel = %SkillPanel
 @onready var collapsible_chat: AFK_CollapsibleChatPanel = %CollapsibleChatPanel
@@ -68,15 +70,25 @@ func _update_player_hp(cur: int, maximum: int) -> void:
 	_last_tracked_player_hp = cur
 	if player_bottom_bar and is_instance_valid(player_bottom_bar):
 		player_bottom_bar.update_hp(cur, maximum)
+	if party_hud_panel and is_instance_valid(party_hud_panel) and party_hud_panel.is_inside_tree() and party_hud_panel.has_method("update_self_hp"):
+		party_hud_panel.update_self_hp(cur, maximum)
 
-## 净化关卡与房间名：剔除冗余的难度前缀 (【普通】/【噩梦】/【地狱】) 与后缀 ((挂机副本)/(挂机点))
+## 规范化关卡与房间名：剔除冗余的后缀 ((挂机副本)/(挂机点))，但保留或明确展示难度前缀
 func _clean_stage_name(raw_name: String) -> String:
 	var s = AnsiHelper.to_plain_text(raw_name).strip_edges()
-	s = s.replace("【普通】", "").replace("【噩梦】", "").replace("【地狱】", "")
-	s = s.replace("[普通]", "").replace("[噩梦]", "").replace("[地狱]", "")
 	s = s.replace("(挂机副本)", "").replace("（挂机副本）", "")
 	s = s.replace("(挂机点)", "").replace("（挂机点）", "")
 	s = s.replace("(副本)", "").replace("（副本）", "")
+	# 若自身包含明确难度前缀则直接保留
+	if "【噩梦】" in s or "【地狱】" in s or "【普通】" in s:
+		return s.strip_edges()
+	# 若无难度前缀且不是安全城镇，根据当前世界难度适度附加醒目前缀
+	var diff = GameState.selected_difficulty
+	if not ("营地" in s or "鲁高因" in s or "海港" in s or "堡垒" in s or "哈洛加斯" in s or "安全区" in s):
+		if diff == "nm" or diff == "nightmare":
+			s = "【噩梦】" + s
+		elif diff == "hell":
+			s = "【地狱】" + s
 	return s.strip_edges()
 
 var _my_player_name: String = ""
@@ -121,6 +133,28 @@ func _ready() -> void:
 		inventory_panel.item_unhovered.connect(func():
 			item_tooltip.hide_tooltip()
 		)
+		if inventory_panel.little_pocket_panel:
+			inventory_panel.little_pocket_panel.visibility_changed.connect(func():
+				if inventory_panel.little_pocket_panel.visible:
+					# 单窗口互斥: 打开小口袋时，关闭纸娃娃、魔盒与随身商店
+					if char_info_panel and char_info_panel.visible:
+						char_info_panel.close()
+					if cube_panel and cube_panel.visible:
+						cube_panel.visible = false
+					if gshop_panel and gshop_panel.visible:
+						gshop_panel.close()
+			)
+		if inventory_panel.socketing_workbench_panel:
+			inventory_panel.socketing_workbench_panel.visibility_changed.connect(func():
+				if inventory_panel.socketing_workbench_panel.visible:
+					# 单窗口互斥: 打开工坊时，关闭纸娃娃、魔盒与随身商店
+					if char_info_panel and char_info_panel.visible:
+						char_info_panel.close()
+					if cube_panel and cube_panel.visible:
+						cube_panel.visible = false
+					if gshop_panel and gshop_panel.visible:
+						gshop_panel.close()
+			)
 		
 	if world_map:
 		world_map.z_index = 200
@@ -138,6 +172,7 @@ func _ready() -> void:
 		
 	if control_matrix:
 		control_matrix.btn_character_clicked.connect(toggle_character_info)
+		control_matrix.btn_hook_clicked.connect(toggle_hook_setting)
 		control_matrix.btn_pickup_clicked.connect(toggle_pickup_setting)
 		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
 		control_matrix.btn_shop_clicked.connect(toggle_gshop_panel)
@@ -145,6 +180,17 @@ func _ready() -> void:
 		control_matrix.btn_craft_clicked.connect(toggle_cube_panel)
 		control_matrix.btn_reset_points_clicked.connect(func(): NetworkClient.send_raw("reset"))
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_title)
+
+	if hook_setting_panel:
+		hook_setting_panel.settings_saved.connect(func(_cfg):
+			_update_hook_btn_style(false)
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("chat 挂机设置已成功更新！")
+		)
+		hook_setting_panel.visibility_changed.connect(func():
+			if not hook_setting_panel.visible:
+				_update_hook_btn_style(false)
+		)
 
 	if skill_panel:
 		skill_panel.hide()
@@ -215,7 +261,7 @@ func _ready() -> void:
 			if not GameState.is_team_leader():
 				show_toast("正在脱离队伍并安全返回主城营地...")
 				await get_tree().create_timer(0.3).timeout
-				_on_return_town_pressed()
+				_on_return_town_pressed(true)
 		)
 	
 	# 向 LPC 请求初始核心全量数据帧
@@ -260,6 +306,8 @@ func _start_death_state(seconds: float = 10.0) -> void:
 	death_overlay.visible = true
 	_death_countdown_timer = seconds
 	_update_death_countdown_display(int(ceil(_death_countdown_timer)), true)
+	if btn_return_town:
+		btn_return_town.disabled = true
 
 	# 平滑渐变进入黑白灰度与暗调 (Rec. 601 灰度加权)
 	var mat = death_overlay.material as ShaderMaterial
@@ -273,6 +321,8 @@ func _start_death_state(seconds: float = 10.0) -> void:
 ## 结束死亡黑白灰度，恢复明亮色彩
 func _end_death_state(instant: bool = false) -> void:
 	_death_countdown_timer = 0.0
+	if btn_return_town:
+		btn_return_town.disabled = false
 	if not death_overlay:
 		death_overlay = get_node_or_null("%DeathOverlay")
 	if not death_overlay:
@@ -295,6 +345,8 @@ func _end_death_state(instant: bool = false) -> void:
 	_death_tween.chain().tween_callback(_on_death_overlay_hidden)
 
 func _on_death_overlay_hidden() -> void:
+	if btn_return_town:
+		btn_return_town.disabled = false
 	if is_instance_valid(death_overlay):
 		death_overlay.visible = false
 
@@ -319,9 +371,22 @@ func _request_lpc_sync() -> void:
 		NetworkClient.send_raw("stage")
 		NetworkClient.send_raw("look")
 
-func _on_return_town_pressed() -> void:
-	print("[AFK_MainHUD] 正在返回主城安全大本营: stage town -> res://scenes/town/town_hub.tscn")
-	_end_death_state(true)
+var _is_changing_scene: bool = false
+
+func _on_return_town_pressed(force: bool = false) -> void:
+	if _is_changing_scene:
+		return
+
+	# 若玩家正处于死亡倒地休整状态，且非强制，严禁手动回城，防止规避死亡惩罚
+	if not force and _death_countdown_timer > 0.0:
+		show_toast("当前正处于重伤休整中，无法返回营地！")
+		return
+
+	# 组队状态下，仅队长有权带队返回安全区；队员禁止单独返回安全区（除非先主动离队）
+	if not force and GameState.is_in_team and not GameState.is_team_leader():
+		show_toast("当前处于队伍中，队员无法单独返回安全区，请先离队！")
+		return
+
 	# 依据当前关卡所属大幕精准预设目标主城，杜绝切场景瞬间闪烁或误判
 	if GameState.current_stage_info is Dictionary and GameState.current_stage_info.has("act"):
 		var cur_act = int(GameState.current_stage_info.get("act", 1))
@@ -340,9 +405,22 @@ func _on_return_town_pressed() -> void:
 		elif cur_act == 5:
 			GameState.current_town_name = "哈洛加斯"
 			GameState.current_location_act = "act5"
-	if NetworkClient.is_connected:
-		NetworkClient.send_raw("stage town")
-	get_tree().change_scene_to_file("res://scenes/town/town_hub.tscn")
+
+	if not force:
+		if NetworkClient.is_connected:
+			print("[AFK_MainHUD] 正在向服务端请求脱战返回安全大本营: stage town ...")
+			NetworkClient.send_raw("stage town")
+			show_toast("正在向营地撤退脱战...")
+		# 核心：普通点击绝不盲切场景！严守由服务端权威下发的 stage_leave 确认帧触发切场景！
+		return
+
+	# 仅在 force == true（如 gstatus 确认人已在主城安全区，或特定系统兜底强制切换）时才直接切场景
+	_is_changing_scene = true
+	print("[AFK_MainHUD] 确认进入主城安全大本营: res://scenes/town/town_hub.tscn")
+	_end_death_state(true)
+	var tree = get_tree()
+	if tree and is_inside_tree():
+		tree.change_scene_to_file("res://scenes/town/town_hub.tscn")
 
 ## 清空战场全部实体与飞行中特效 (用于返回大地图或切关时彻底清场)
 func _clear_battlefield() -> void:
@@ -380,26 +458,35 @@ func _clear_battlefield() -> void:
 			player_bottom_bar.attack_progress_bar.value = 0.0
 
 func _on_return_map_pressed() -> void:
-	# 组队状态下，仅队长有权带领全队返回大地图
+	# 组队状态下，仅队长有权操作大地图选点
 	if GameState.is_in_team and not GameState.is_team_leader():
-		show_toast("当前处于队伍中，仅队长可带领返回大地图！")
+		show_toast("当前处于队伍中，仅队长可操作大地图选点！")
 		return
 
-	# 1. 向服务端发送 stage leave：彻底脱战离开挂机房间，清空仇恨并停止刷怪
+	# 仅请求最新大地图进度 stage_info，绝不发送 stage leave 破坏挂机
 	if NetworkClient.is_connected:
-		NetworkClient.send_raw("stage leave")
 		NetworkClient.send_raw("stage")
-		
-	# 2. 立即彻底清空战场实体，移除所有怪物与弹道，停止前端战斗表现
-	_clear_battlefield()
 
-	# 3. 弹出大地图供玩家从容选点：保持当前挂机关卡所属大幕连贯
+	# 弹出大地图供玩家从容选点：保持当前挂机关卡所属大幕连贯
 	if world_map:
+		world_map.reset_user_selection()
+		var target_act = ""
 		if GameState.current_stage_info is Dictionary and GameState.current_stage_info.has("act"):
 			var cur_act_num = int(GameState.current_stage_info.get("act", 1))
-			GameState.selected_act = "act%d" % cur_act_num
-		world_map._auto_locate_act()
+			target_act = "act%d" % cur_act_num
+			GameState.selected_act = target_act
+		elif GameState.current_location_act != "":
+			target_act = GameState.current_location_act
+		elif GameState.selected_act != "":
+			target_act = GameState.selected_act
+
+		if target_act != "" and world_map.ACTS_CONFIG.has(target_act):
+			world_map.switch_act(target_act, false)
+		else:
+			world_map._auto_locate_act()
+
 		world_map.update_progress(GameState.player_max_stage)
+		world_map.move_to_front()
 		world_map.show()
 
 func _on_spot_selected(spot_data: Dictionary) -> void:
@@ -458,7 +545,16 @@ func _update_boss_ui() -> void:
 		boss_progress_bar.value = pct
 
 func _on_exit_to_title() -> void:
-	get_tree().change_scene_to_file("res://scenes/login/login_screen.tscn")
+	if NetworkClient.is_connected:
+		NetworkClient.send_raw("quit")
+		var tree = get_tree()
+		if tree and is_inside_tree():
+			await tree.create_timer(0.15).timeout
+		NetworkClient.disconnect_server(true)
+	GameState.reset_on_logout()
+	var tree = get_tree()
+	if tree and is_inside_tree():
+		tree.change_scene_to_file("res://scenes/login/login_screen.tscn")
 
 func _hook_network_client() -> void:
 	# 1. 从 GameState 兜底初始化
@@ -485,6 +581,23 @@ func _hook_network_client() -> void:
 				net.json_frame_received.connect(_on_network_json)
 			if not net.text_received.is_connected(_on_network_text):
 				net.text_received.connect(_on_network_text)
+			if net.has_signal("reconnected_to_server") and not net.reconnected_to_server.is_connected(_on_reconnected_to_server):
+				net.reconnected_to_server.connect(_on_reconnected_to_server)
+
+func _exit_tree() -> void:
+	var net = get_node_or_null("/root/NetworkClient")
+	if net:
+		if net.has_signal("json_frame_received") and net.json_frame_received.is_connected(_on_network_json):
+			net.json_frame_received.disconnect(_on_network_json)
+		if net.has_signal("text_received") and net.text_received.is_connected(_on_network_text):
+			net.text_received.disconnect(_on_network_text)
+		if net.has_signal("reconnected_to_server") and net.reconnected_to_server.is_connected(_on_reconnected_to_server):
+			net.reconnected_to_server.disconnect(_on_reconnected_to_server)
+
+func _on_reconnected_to_server() -> void:
+	print("[AFK_MainHUD] ★★★ 断线重连成功，正在向 LPC 请求最新战场状态同步 ★★★")
+	show_toast("已重新连接战网！正在同步战场状态...")
+	_request_lpc_sync()
 
 static func _safe_int(val: Variant, default_val: int = 0) -> int:
 	if val == null:
@@ -547,17 +660,23 @@ func _find_monster_node(mon_id: String, mon_uuid: String) -> AFK_MonsterDisplay:
 ## LPC 服务端专属协议解构
 ## -------------------------------------------------------------
 func _on_network_json(type: String, data: Variant) -> void:
+	if not is_inside_tree():
+		return
+
 	# 0. LPC 专属大地图关卡进度帧 (stage_info 按需查询或Boss晋级推送)
 	if type == "stage_info" and data is Dictionary:
 		var max_s = _safe_int(data.get("max_stage"), 0)
 		GameState.player_max_stage = max_s
+		GameState.team_bottleneck_name = str(data.get("bottleneck_name", ""))
 		if data.has("worlds") and data["worlds"] is Array:
 			GameState.unlocked_worlds = data["worlds"]
 		if data.has("selected_stage"):
 			GameState.selected_stage_id = _safe_int(data.get("selected_stage"), 1)
 		if data.has("selected_act"):
 			GameState.selected_act = str(data.get("selected_act", "act1"))
-		print("[AFK_MainHUD] 收到关卡进度更新: max_stage = %d, worlds = %d, selected = %d (%s)" % [max_s, GameState.unlocked_worlds.size(), GameState.selected_stage_id, GameState.selected_act])
+		if data.has("stage_alvls") and data["stage_alvls"] is Dictionary:
+			GameState.stage_alvls = data["stage_alvls"]
+		print("[AFK_MainHUD] 收到关卡进度更新: max_stage = %d, worlds = %d, selected = %d (%s), alvls = %d" % [max_s, GameState.unlocked_worlds.size(), GameState.selected_stage_id, GameState.selected_act, GameState.stage_alvls.size()])
 		if world_map:
 			world_map.update_progress(max_s)
 
@@ -599,6 +718,11 @@ func _on_network_json(type: String, data: Variant) -> void:
 		elif action == "error":
 			var msg = str(data.get("msg", "分解失败！"))
 			show_toast(msg)
+
+	# 0.2 LPC 专属挂机与推图设置帧 (afk_settings)
+	if type == "afk_settings" and data is Dictionary:
+		if hook_setting_panel and hook_setting_panel.has_method("_apply_settings_from_server"):
+			hook_setting_panel._apply_settings_from_server(data)
 			
 	# 1. LPC 专属全结构化角色属性帧 (gscore)
 	if type == "gscore" and data is Dictionary:
@@ -642,6 +766,10 @@ func _on_network_json(type: String, data: Variant) -> void:
 		var amt = _safe_int(data.get("amount"), 0)
 		if inventory_panel and inventory_panel.has_method("update_item_amount"):
 			inventory_panel.update_item_amount(fid, amt)
+	# 2.2 LPC 背包账本补丁帧 (gbag_patch: 掉落入包的权威页/槽/条目, 虚影根治 2026-10-04)
+	elif type == "gbag_patch" and data is Dictionary:
+		if inventory_panel and inventory_panel.has_method("apply_gbag_patch"):
+			inventory_panel.apply_gbag_patch(data)
 
 	# 3. 经典状态帧 (status: 仅更新玩家自身状态)
 	elif type == "status" and data is Dictionary:
@@ -693,7 +821,12 @@ func _on_network_json(type: String, data: Variant) -> void:
 				# 严格按服务端发来的受击实体 file_name 进行精准定向更新，彻底杜绝盲写当前目标！
 				var target_node = _find_monster_node("", target_name)
 				if target_node and is_instance_valid(target_node):
-					target_node.update_hp(c_hp, m_hp)
+					# 若该怪物当前正处于多段连击弹道飞行窗口中，暂不让 charhp 提前抢跑剧透血量
+					var in_combo_until = int(target_node.get_meta("in_combo_until", 0))
+					if in_combo_until > Time.get_ticks_msec():
+						pass
+					else:
+						target_node.update_hp(c_hp, m_hp)
 			
 	# 3.2 角色升级纯 JSON 事件帧 (level_up: 纯后端数据驱动)
 	elif type == "level_up" and data is Dictionary:
@@ -705,6 +838,7 @@ func _on_network_json(type: String, data: Variant) -> void:
 			player_bottom_bar.play_level_up_fx()
 			if not _my_player_name.is_empty():
 				player_bottom_bar.update_player_info("Lv.%d %s" % [n_lvl, _my_player_name])
+		_send_lpc_cmd("gscore")
 			
 	# 4. 场景标题 (title / room)
 	elif (type == "title" or type == "room") and data is Dictionary:
@@ -731,6 +865,12 @@ func _on_network_json(type: String, data: Variant) -> void:
 
 	# 6.6 LPC 随身商店购买反馈帧 (gshop_msg)
 	elif type == "gshop_msg" and data is Dictionary:
+		var msg = str(data.get("msg", ""))
+		if not msg.is_empty():
+			show_toast(msg)
+
+	# 6.7 LPC 背包系统与满包警告反馈帧 (gbag_msg)
+	elif type == "gbag_msg" and data is Dictionary:
 		var msg = str(data.get("msg", ""))
 		if not msg.is_empty():
 			show_toast(msg)
@@ -833,18 +973,21 @@ func _on_network_json(type: String, data: Variant) -> void:
 		_update_battlefield_background(bg, s_id)
 
 		# 切图平滑清场：销毁旧场景残留怪节点、清空槽位与残余特效
+		_is_returning_to_town = false
 		_clear_battlefield()
 
 		NetworkClient.send_raw("ghp1")
 
-	# 13.1 LPC 离开挂机副本待机帧 (stage_leave)
+	# 13.1 LPC 离开挂机副本待机帧 (stage_leave: 队长带队回城广播或单人脱战)
 	elif type == "stage_leave":
 		_clear_battlefield()
 		var t_name = "罗格营地"
 		var act_id = "act1"
+		var revive_rem = 0.0
 		if data is Dictionary:
 			t_name = str(data.get("town_name", data.get("town", "罗格营地")))
 			act_id = str(data.get("act_id", "act1"))
+			revive_rem = float(data.get("revive_remain", 0.0))
 		elif data is String:
 			for part in data.split(","):
 				if part.begins_with("town_name:"):
@@ -853,20 +996,34 @@ func _on_network_json(type: String, data: Variant) -> void:
 					t_name = part.substr(5)
 				elif part.begins_with("act_id:"):
 					act_id = part.substr(7)
+				elif part.begins_with("revive_remain:"):
+					revive_rem = float(part.substr(14))
 		GameState.current_town_name = t_name
 		GameState.current_location_act = act_id
+		GameState.selected_act = act_id
+		GameState.death_countdown_remain = revive_rem
 		if current_map_label:
 			current_map_label.text = "大地图休整 (%s)" % t_name
+		if revive_rem > 0.0:
+			show_toast("你身负重伤已被护送回大本营【%s】调息！" % t_name)
+		else:
+			show_toast("已安全脱离战场，返回大本营【%s】" % t_name)
+		_end_death_state(true)
+		var tree = get_tree()
+		if tree and is_inside_tree():
+			tree.change_scene_to_file("res://scenes/town/town_hub.tscn")
 
 	# 13.2 LPC 角色阵亡救护回城帧 (player_death_revive: 仅非副本区域使用)
 	elif type == "player_death_revive":
 		_clear_battlefield()
 		var msg = str(data.get("msg", "你在战斗中力竭倒地，已被修女与卫队救回营地大本营！")) if data is Dictionary else "你在战斗中力竭倒地，已被修女与卫队救回营地大本营！"
 		show_toast(msg)
-		get_tree().create_timer(1.2).timeout.connect(func():
-			if is_instance_valid(self):
-				_on_return_town_pressed()
-		)
+		var tree = get_tree()
+		if tree and is_inside_tree():
+			tree.create_timer(1.2).timeout.connect(func():
+				if is_instance_valid(self) and is_inside_tree():
+					_on_return_town_pressed()
+			)
 
 	# 13.3 挂机副本 10 秒倒地休整帧 (player_down: 纯图形灰度与大倒计时驱动，零冗余文本)
 	elif type == "player_down":
@@ -907,6 +1064,12 @@ var _last_killed_slot: int = -1
 var _last_killed_pos: Vector2 = Vector2.ZERO
 var _killed_monster_positions: Dictionary = {} # mid (String) -> Vector2
 
+# 连击弹道错峰状态: 同攻击者+技能 250ms 内的突发帧视为一次连击串，按序错开发射
+var _last_skill_key: String = ""
+var _last_volley_time: int = 0
+var _last_victim_id: String = ""
+var _volley_idx: int = 0
+
 ## 为新怪物随机动态分配空闲战场槽位 (Boss 居中，小怪随机且异位刷新)
 func _allocate_slot_for_monster(rank: String) -> int:
 	if rank == "boss":
@@ -925,6 +1088,13 @@ func _allocate_slot_for_monster(rank: String) -> int:
 	if free_slots.size() > 1 and _last_killed_slot in free_slots:
 		free_slots.erase(_last_killed_slot)
 		
+	# 若当前处于组队状态 (左上角展开 Party HUD 队友卡片)，坚决避开被遮挡的 Slot 5 与 Slot 6
+	if GameState.is_in_team or (party_hud_panel and party_hud_panel.visible):
+		if free_slots.size() > 1 and 5 in free_slots:
+			free_slots.erase(5)
+		if free_slots.size() > 1 and 6 in free_slots:
+			free_slots.erase(6)
+
 	# 若当前场上存在 Boss（-99 被占），小怪避开正前中锋 Slot 2 与后排中央 Slot 7，留出开阔视野
 	if _occupied_slots.has(-99):
 		if free_slots.size() > 1 and 2 in free_slots:
@@ -999,6 +1169,25 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 			elif _death_countdown_timer > 0.0 and p_hp > 0:
 				_end_death_state()
 
+		# 单人常驻个人卡片数据与 Buff 光环高频同步
+		if party_hud_panel and is_instance_valid(party_hud_panel) and not GameState.is_in_team:
+			var solo_data = {
+				"id": str(p.get("id", GameState.get_my_character_id())),
+				"name": p_name,
+				"class": str(p.get("class", "ama")),
+				"level": p_lvl,
+				"hp": p_hp,
+				"max_hp": p_max_hp,
+				"power": str(p.get("power", "10")),
+				"is_leader": true,
+				"buffs": p.get("buffs", [])
+			}
+			if party_hud_panel.has_method("update_solo_card"):
+				party_hud_panel.update_solo_card(solo_data)
+
+		# 召唤仆从状态徽章展示 (复生骷髅、石魔等)
+		_update_summons_display(data.get("summons", []))
+
 	# 1. 关卡与 Boss 进度
 	var st = data.get("stage", {})
 	if st is Dictionary and not st.is_empty():
@@ -1025,8 +1214,8 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 				_is_returning_to_town = true
 				show_toast("当前处于城镇安全区，正在返回大本营...")
 				get_tree().create_timer(1.2).timeout.connect(func():
-					if is_instance_valid(self):
-						_on_return_town_pressed()
+					if is_instance_valid(self) and _is_returning_to_town:
+						_on_return_town_pressed(true)
 				)
 			return
 
@@ -1067,7 +1256,16 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 			if parent_viewport:
 				parent_viewport.add_child(m_node)
 					
-			var slot_idx = _allocate_slot_for_monster(m_rank)
+			var slot_idx: int = -1
+			if m_rank == "boss":
+				slot_idx = -99
+			elif m.has("slot") and m.get("slot") != null:
+				slot_idx = _safe_int(m.get("slot"), -1)
+			
+			# 仅当服务端未提供有效槽位 (单机或离线兜底) 时才退化为本地分配
+			if slot_idx == -1:
+				slot_idx = _allocate_slot_for_monster(m_rank)
+
 			m_node.slot_index = slot_idx
 			if slot_idx != -99:
 				_occupied_slots[slot_idx] = mid
@@ -1081,8 +1279,20 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 				
 			_monster_instances[mid] = m_node
 		else:
-			# 存活怪物刷新血量
+			# 存活怪物刷新血量与 Debuff 减益徽章状态 (实时同步伤害加深/衰老/降抗等减益)
 			m_node.update_hp(_safe_int(m.get("hp")), _safe_int(m.get("max_hp")))
+			var cur_dbs = m.get("debuffs", [])
+			m_node.update_debuffs(cur_dbs if cur_dbs is Array else [])
+			# 权威槽位对齐：若服务端指定了有效槽位且与当前不一致，即刻校准
+			if m.has("slot") and m.get("slot") != null:
+				var s_slot = _safe_int(m.get("slot"), -1)
+				if s_slot != -1 and s_slot != m_node.slot_index:
+					if _occupied_slots.has(m_node.slot_index) and _occupied_slots[m_node.slot_index] == mid:
+						_occupied_slots.erase(m_node.slot_index)
+					m_node.slot_index = s_slot
+					if s_slot != -99:
+						_occupied_slots[s_slot] = mid
+					_apply_monster_slot_position(m_node, s_slot)
 			
 	# 清理服务端已移除的过期怪
 	var to_clean: Array = []
@@ -1101,10 +1311,23 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 				
 	_update_target_focus()
 	
-	# 3. 队友同屏血量联动
+	# 3. 队友同屏血量联动 (驱动左侧 Party HUD 常驻展示)
 	var raw_team = data.get("team", [])
-	if party_hud_panel and raw_team is Array and raw_team.size() > 0:
-		party_hud_panel.update_party(raw_team)
+	if raw_team is Array:
+		if raw_team.size() > 1:
+			var t_leader = str(data.get("team_leader", ""))
+			if t_leader.is_empty():
+				for tm in raw_team:
+					if tm is Dictionary and tm.get("is_leader") == 1:
+						t_leader = str(tm.get("id", ""))
+						break
+			GameState.update_team_data(t_leader, raw_team)
+			if party_hud_panel and party_hud_panel.has_method("update_party"):
+				party_hud_panel.update_party(raw_team)
+		elif raw_team.is_empty() and GameState.is_in_team:
+			GameState.clear_team()
+			if party_hud_panel and party_hud_panel.has_method("update_party"):
+				party_hud_panel.update_party([])
 
 ## 智能集火目标更新 (Boss > 暗金 > 勇士 > 残血)
 func _update_target_focus() -> void:
@@ -1218,6 +1441,10 @@ func _handle_combat_data(data: Dictionary) -> void:
 			player_bottom_bar.trigger_attack(interval)
 			if not skill_name.is_empty():
 				player_bottom_bar.set_main_skill(skill_name, skill_code)
+			# 主动技能施法起手：触发法力球翻涌与脉冲激荡
+			var seq_num := _safe_int(data.get("seq"), 1)
+			if seq_num <= 1 and skill_code != "attack" and not skill_name.is_empty() and skill_name != "普通攻击":
+				player_bottom_bar.pulse_mp()
 	elif is_victim_me:
 		# 玩家受击：记录承受伤害
 		if dmg > 0 and battle_statistics and is_instance_valid(battle_statistics):
@@ -1239,6 +1466,82 @@ func _handle_combat_data(data: Dictionary) -> void:
 		if atk_node and is_instance_valid(atk_node):
 			atk_node.trigger_attack(interval, skill_name)
 
+	# 1. 连击弹道错峰 + 连锁蔓延起点解析 (接收时刻快照，错峰延迟后坐标仍准)
+	#    服务端 effect/seq/from 字段优先: combo=seq×110ms 连珠串, chain=seq×80ms 逐段从上一跳蔓延;
+	#    全局客观判定: 无论是自己还是组队队友打出的连击/连锁技能，均按权威字段错峰发射，保持连环打击视觉;
+	#    旧帧无字段时启发式: 同源同技 250ms 突发 → 同目标连续=连击错峰, 闪电系=从上一跳受害者起弧
+	#    (AoE 异目标不受影响: 不错峰、从玩家/队友卡片齐射)
+	var launch_delay := 0.0
+	var chain_from := ""
+	var fx_effect := str(data.get("effect", ""))
+	var fx_seq := _safe_int(data.get("seq"), 1)
+	if fx_effect == "combo" and fx_seq > 1:
+		launch_delay = float(fx_seq - 1) * 0.11
+	elif fx_effect == "chain" and fx_seq > 1:
+		launch_delay = float(fx_seq - 1) * 0.08
+		chain_from = str(data.get("from", ""))
+	elif is_attacker_me:
+		var now_ms := Time.get_ticks_msec()
+		var skill_key: String = atk_id + "|" + skill_code
+		var same_skill := now_ms - _last_volley_time < 250 and skill_key == _last_skill_key
+		if same_skill and vic_id == _last_victim_id:
+			_volley_idx += 1
+		else:
+			_volley_idx = 0
+		# 连锁家族 (闪电/链) 启发式: 突发内后续帧从上一跳受害者身上起弧蔓延
+		if same_skill and _is_chain_visual_skill(skill_code, elem):
+			chain_from = _last_victim_id
+		_last_skill_key = skill_key
+		_last_volley_time = now_ms
+		_last_victim_id = vic_id
+		if _volley_idx > 0:
+			launch_delay = float(_volley_idx) * 0.11
+	launch_delay = min(launch_delay, 0.7)
+
+	# 多段连击保护：设置该怪物处于连击弹道飞行的保护窗口时间戳，防止 charhp 提前跑满剧透导致血条倒流跳动
+	var target_mon = _find_monster_node(vic_id, vic_uuid)
+	if target_mon and is_instance_valid(target_mon):
+		var combo_guard_ms = 0
+		if launch_delay > 0.001:
+			combo_guard_ms = Time.get_ticks_msec() + int(launch_delay * 1000.0) + 450
+		elif fx_effect == "combo" or _safe_int(data.get("total"), 1) > 1:
+			var est_total = _safe_int(data.get("total"), 2)
+			combo_guard_ms = Time.get_ticks_msec() + int((est_total - 1) * 110.0) + 450
+		if combo_guard_ms > int(target_mon.get_meta("in_combo_until", 0)):
+			target_mon.set_meta("in_combo_until", combo_guard_ms)
+
+	if launch_delay <= 0.001:
+		_launch_combat_fx(vic_id, vic_uuid, atk_id, str(data.get("attacker_uuid", "")), skill_code, elem, is_crit, is_attacker_me, is_victim_me, result, dmg, data, chain_from)
+	else:
+		var fx_tw = create_tween().bind_node(self)
+		fx_tw.tween_interval(launch_delay)
+		fx_tw.tween_callback(_launch_combat_fx.bind(vic_id, vic_uuid, atk_id, str(data.get("attacker_uuid", "")), skill_code, elem, is_crit, is_attacker_me, is_victim_me, result, dmg, data, chain_from))
+
+## 连锁视觉家族判定 (闪电/链系技能: 弧线应从目标身上蔓延而非玩家齐射)
+func _is_chain_visual_skill(skill_code: String, elem: String) -> bool:
+	var sk := skill_code.to_lower()
+	return "lightning" in sk or "chain" in sk or "电" in elem or "light" in elem.to_lower()
+
+## 弹道发射器：计算起点/终点并触发投射物 (错峰延迟后在发射时刻重算坐标，目标移动/阵亡仍准确)
+## chain_from 非空 = 连锁蔓延帧: 弧线起点锚定上一跳受害者 (活怪查节点，阵亡回落死亡坐标)
+func _launch_combat_fx(
+	vic_id: String,
+	vic_uuid: String,
+	atk_id: String,
+	atk_uuid: String,
+	skill_code: String,
+	elem: String,
+	is_crit: bool,
+	is_attacker_me: bool,
+	is_victim_me: bool,
+	result: String,
+	dmg: int,
+	data: Dictionary,
+	chain_from: String
+) -> void:
+	if world_map and world_map.visible:
+		return
+
 	# 1. 寻找受击怪物用于确定弹道目标点
 	var hit_node = _find_monster_node(vic_id, vic_uuid)
 
@@ -1251,29 +1554,73 @@ func _handle_combat_data(data: Dictionary) -> void:
 
 	var start_pos = player_pos
 	var target_pos = player_pos
+	var is_friendly_attacker: bool = is_attacker_me
 
 	if is_attacker_me:
 		start_pos = player_pos
+		# 连锁蔓延: 起弧锚定上一跳受害者 (而非玩家)，形成 怪→怪 蔓延视觉
+		if not chain_from.is_empty():
+			var from_node = _find_monster_node(chain_from, "")
+			if from_node and is_instance_valid(from_node):
+				start_pos = from_node.global_position
+			elif _killed_monster_positions.has(chain_from):
+				start_pos = _killed_monster_positions[chain_from]
 		if hit_node and is_instance_valid(hit_node):
 			target_pos = hit_node.global_position
 		else:
-			target_pos = get_viewport_rect().size * Vector2(0.5, 0.45)
+			target_pos = _killed_monster_positions.get(vic_id, get_viewport_rect().size * Vector2(0.5, 0.45))
 	else:
-		# 怪物攻击玩家或其它实体
-		if atk_node and is_instance_valid(atk_node):
-			start_pos = atk_node.global_position
+		# 优先判定攻击者是否为组队队友 (从左上角队友卡片发射)
+		var teammate_card_pos = Vector2.ZERO
+		if party_hud_panel and is_instance_valid(party_hud_panel) and party_hud_panel.has_method("get_member_card_anchor_pos"):
+			teammate_card_pos = party_hud_panel.get_member_card_anchor_pos(atk_id)
+		
+		if teammate_card_pos != Vector2.ZERO:
+			if not chain_from.is_empty():
+				var from_node = _find_monster_node(chain_from, "")
+				if from_node and is_instance_valid(from_node):
+					start_pos = from_node.global_position
+				elif _killed_monster_positions.has(chain_from):
+					start_pos = _killed_monster_positions[chain_from]
+				else:
+					start_pos = teammate_card_pos
+			else:
+				start_pos = teammate_card_pos
+			is_friendly_attacker = true
+			if hit_node and is_instance_valid(hit_node):
+				target_pos = hit_node.global_position
+			else:
+				target_pos = _killed_monster_positions.get(vic_id, get_viewport_rect().size * Vector2(0.5, 0.45))
 		else:
-			start_pos = get_viewport_rect().size * Vector2(0.5, 0.45)
-		target_pos = player_pos if is_victim_me else (hit_node.global_position if (hit_node and is_instance_valid(hit_node)) else player_pos)
+			# 怪物攻击玩家或其它实体
+			var atk_node = _find_monster_node(atk_id, atk_uuid)
+			if atk_node and is_instance_valid(atk_node):
+				start_pos = atk_node.global_position
+			else:
+				start_pos = get_viewport_rect().size * Vector2(0.5, 0.45)
+			
+			# 判定受击目标：若受害者是队友，目标点锚定受害队友的卡片
+			var victim_card_pos = Vector2.ZERO
+			if party_hud_panel and is_instance_valid(party_hud_panel) and party_hud_panel.has_method("get_member_card_anchor_pos"):
+				victim_card_pos = party_hud_panel.get_member_card_anchor_pos(vic_id)
+			
+			if is_victim_me:
+				target_pos = player_pos
+			elif victim_card_pos != Vector2.ZERO:
+				target_pos = victim_card_pos
+			elif hit_node and is_instance_valid(hit_node):
+				target_pos = hit_node.global_position
+			else:
+				target_pos = player_pos
 
 	# 3. 封装受击核心结算回调 (Method Callable.bind: 杜绝 Lambda 闭包捕获 Node 导致已释放报错)
-	var apply_hit_action = _apply_combat_hit.bind(vic_id, vic_uuid, result, elem, dmg, is_crit, data)
+	var apply_hit_action = _apply_combat_hit.bind(vic_id, vic_uuid, result, elem, dmg, is_crit, data, is_attacker_me)
 
 	# 4. 触发轻量弹道视觉效果并在飞抵瞬间触发打击结算 (区分玩家与怪物弹道分流，支持数量与形态)
 	if fx_manager and is_instance_valid(fx_manager):
 		var fx_count = _safe_int(data.get("count"), 1)
 		var fx_type = str(data.get("fx_type", ""))
-		fx_manager.play_combat_fx(start_pos, target_pos, skill_code, elem, apply_hit_action, is_crit, is_attacker_me, fx_count, fx_type)
+		fx_manager.play_combat_fx(start_pos, target_pos, skill_code, elem, apply_hit_action, is_crit, is_friendly_attacker, fx_count, fx_type)
 	else:
 		apply_hit_action.call()
 
@@ -1285,39 +1632,61 @@ func _apply_combat_hit(
 	elem: String,
 	dmg: int,
 	is_crit: bool,
-	data: Dictionary
+	data: Dictionary,
+	is_attacker_me: bool = true
 ) -> void:
 	if not is_instance_valid(self): return
 	var hit_node = _find_monster_node(vic_id, vic_uuid)
 	if hit_node and is_instance_valid(hit_node) and hit_node.visible:
-		# 飘字与受击动效
+		# 飘字与受击动效 (透传 is_attacker_me: 自身大字高光 vs 队友小字半透)
 		if result == "miss":
-			hit_node.spawn_damage(0, elem, false, false)
+			hit_node.spawn_damage(0, elem, false, false, is_attacker_me)
 		elif result == "dodge":
-			hit_node.spawn_damage(-1, elem, false, false)
+			hit_node.spawn_damage(-1, elem, false, false, is_attacker_me)
 		elif result == "block":
-			hit_node.spawn_damage(-2, elem, false, false)
+			hit_node.spawn_damage(-2, elem, false, false, is_attacker_me)
 		else:
-			hit_node.spawn_damage(dmg, elem, is_crit, false)
+			hit_node.spawn_damage(dmg, elem, is_crit, false, is_attacker_me)
 			hit_node.play_hit_reaction(is_crit)
 			
-		# 更新受击怪当前血量 (负数规范化为 0)
-		var vic_hp = max(0, _safe_int(data.get("you_hp"), 0))
+		# 服务端权威生命值对齐 (Authoritative Server First):
+		# 1. 服务端下发了权威受击者生命快照 you_hp (vic_hp):
+		#    - 若 vic_hp == 0: 服务端权威判定斩杀，立即执行致死归零流程
+		#    - 若 vic_hp > 0: 服务端权威判定存活，血量严格对齐 vic_hp (支持回血/格挡减免/多段判定)，绝不越权假死！
+		# 2. 仅在服务端未提供 you_hp (离线/单机降级) 时，才以本地步进扣除 step_hp
+		var has_vic_hp: bool = data.has("you_hp")
+		var raw_vic_hp: int = _safe_int(data.get("you_hp"), 0) if has_vic_hp else hit_node.cur_hp
+		var vic_hp = max(0, raw_vic_hp)
 		var vic_max_hp = _safe_int(data.get("you_max_hp"), -1)
+		
+		var target_hp: int = hit_node.cur_hp
+		if has_vic_hp:
+			if vic_hp == 0:
+				target_hp = 0
+			else:
+				# 服务端明确存活！即便单次伤害数值大于怪物当前血量，也绝对采纳服务端存活事实
+				target_hp = max(1, vic_hp)
+		else:
+			# 离线或无服务端血量兜底步进
+			if dmg > 0 and hit_node.cur_hp > 0:
+				target_hp = max(0, hit_node.cur_hp - dmg)
+			else:
+				target_hp = hit_node.cur_hp
 		
 		# 关键防护：防止跨阶级血量篡改 (严禁将 Boss 级巨额血量覆盖给普通小怪)
 		if vic_max_hp > 0:
 			if hit_node.cur_rank == "normal" and vic_max_hp > hit_node.max_hp * 3 and hit_node.max_hp < 1000:
-				# 拦截非法巨额血量覆盖，仅按原始上限同比扣减
-				var safe_cur = int(float(vic_hp) * float(hit_node.max_hp) / float(vic_max_hp)) if vic_max_hp > 0 else vic_hp
+				var safe_cur = int(float(target_hp) * float(hit_node.max_hp) / float(vic_max_hp)) if vic_max_hp > 0 else target_hp
+				if target_hp > 0 and safe_cur < 1:
+					safe_cur = 1
 				hit_node.update_hp(safe_cur, hit_node.max_hp)
 			else:
-				hit_node.update_hp(vic_hp, vic_max_hp)
+				hit_node.update_hp(target_hp, vic_max_hp)
 		else:
-			hit_node.update_hp(vic_hp)
+			hit_node.update_hp(target_hp)
 		
 		# 核心致死判定：血量归零即刻触发该点位怪物就地死亡消散，并记录绝对屏幕物理坐标！
-		if vic_hp <= 0 and not hit_node.is_dying:
+		if target_hp <= 0 and not hit_node.is_dying:
 			if battle_statistics and is_instance_valid(battle_statistics):
 				battle_statistics.record_kill(1)
 			var dead_mid = hit_node.cur_id
@@ -1348,7 +1717,7 @@ func _apply_combat_hit(
 		if dmg > 0:
 			var any_node = _monster_instances.get(_current_target_id, null)
 			if any_node and is_instance_valid(any_node) and not any_node.is_dying:
-				any_node.spawn_damage(dmg, elem, is_crit, true)
+				any_node.spawn_damage(dmg, elem, is_crit, true, is_attacker_me)
 
 func _on_monster_death_completed(dead_mid: String, dead_slot: int) -> void:
 	if not is_instance_valid(self): return
@@ -1414,12 +1783,18 @@ func _handle_reward_pop(data: Dictionary) -> void:
 		if inventory_panel and inventory_panel.has_method("add_incremental_reward"):
 			inventory_panel.add_incremental_reward(it, gold)
 
-		# (2) 弹出专属高优先级战利品横幅 (绝不被金币冲刷覆盖)
-		_show_loot_banner(it, mon_name, gold, exp_val, col_hex)
+		# (2) 战利品横幅弹出完全交由服务端权威裁决 (如暗金或未来高阶符文)
+		var allow_banner = bool(it.get("show_banner", false)) or bool(data.get("show_banner", false))
+		if allow_banner:
+			_show_loot_banner(it, mon_name, gold, exp_val, col_hex)
 
-		# (2.1) 击杀怪物点位原地升起战利品名称浮字
-		if spawn_pos != Vector2.ZERO:
-			_show_ground_item_toast(clean_name, col_hex, spawn_pos)
+		# (2.1) 击杀怪物精准落位于脚下地表，呼吸晃动 2.2s，随后化作流光小箭头直射背包 (避让原位刷新出的新怪)
+		var drop_pos = spawn_pos
+		if drop_pos == Vector2.ZERO:
+			drop_pos = Vector2(size.x * 0.45, size.y * 0.58)
+		else:
+			drop_pos += Vector2(0.0, 75.0) # 精准落位于怪物脚下地表
+		_spawn_loot_drop_fx(it, drop_pos, col_hex)
 
 		# (3) 永久追加至系统战斗信息流中，挂机亦可随时翻阅
 		var chat_bb = "[color=#ffd700]★ 击杀【%s】掉落了：[/color][color=%s]【%s】[/color]" % [mon_name if not mon_name.is_empty() else "怪物", col_hex, clean_name]
@@ -1598,6 +1973,26 @@ func _show_minor_reward_toast(gold: int, exp_val: int, mon_name: String, spawn_p
 	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.4).set_delay(0.45)
 	tw.tween_callback(lbl.queue_free)
 
+## 触发战利品掉落呼吸晃动 1.0s 与流光小箭头入包动效
+func _spawn_loot_drop_fx(it: Dictionary, spawn_pos: Vector2, col_hex: String) -> void:
+	var target_pos = _get_bag_target_pos()
+	var fx = LootDropFxScript.new()
+	add_child(fx)
+	fx.setup(it, spawn_pos, target_pos, col_hex, Callable(self, "_on_loot_reach_bag"))
+
+## 获取背包入口屏幕物理坐标
+func _get_bag_target_pos() -> Vector2:
+	if inventory_panel and is_instance_valid(inventory_panel) and inventory_panel.is_visible_in_tree():
+		return inventory_panel.global_position + Vector2(40.0, 100.0)
+	return Vector2(size.x - 60.0, size.y * 0.4)
+
+## 战利品流光小箭头击中背包入口反馈 (微震呼吸)
+func _on_loot_reach_bag() -> void:
+	if inventory_panel and is_instance_valid(inventory_panel):
+		var tw = create_tween().bind_node(inventory_panel)
+		tw.tween_property(inventory_panel, "scale", Vector2(1.02, 1.02), 0.08).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(inventory_panel, "scale", Vector2(1.0, 1.0), 0.12).set_trans(Tween.TRANS_SINE)
+
 ## 击杀现场战利品名称浮字 (品质色彩在尸体处冉冉升起)
 func _show_ground_item_toast(item_name: String, col_hex: String, spawn_pos: Vector2) -> void:
 	var lbl = Label.new()
@@ -1744,6 +2139,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_P and not event.echo:
 			get_viewport().set_input_as_handled()
 			toggle_pickup_setting()
+		elif event.keycode == KEY_A and not event.echo:
+			get_viewport().set_input_as_handled()
+			toggle_hook_setting()
 		elif event.keycode == KEY_T and not event.echo:
 			get_viewport().set_input_as_handled()
 			toggle_skill_panel()
@@ -1758,13 +2156,18 @@ func toggle_character_info() -> void:
 	if char_info_panel.visible:
 		char_info_panel.close()
 	else:
-		# 单窗口互斥: 关魔盒、随身商店与技能面板
+		# 单窗口互斥: 关魔盒、随身商店与技能面板、工坊与小口袋
 		if skill_panel and skill_panel.visible:
 			skill_panel.close()
 		if cube_panel and cube_panel.visible:
 			cube_panel.visible = false
 		if gshop_panel and gshop_panel.visible:
 			gshop_panel.close()
+		if inventory_panel:
+			if inventory_panel.socketing_workbench_panel:
+				inventory_panel.socketing_workbench_panel.close()
+			if inventory_panel.little_pocket_panel:
+				inventory_panel.little_pocket_panel.hide()
 		item_tooltip.hide_tooltip()
 		char_info_panel.open()
 
@@ -1783,6 +2186,11 @@ func toggle_skill_panel() -> void:
 			gshop_panel.close()
 		if pickup_setting_panel and pickup_setting_panel.visible:
 			pickup_setting_panel.hide()
+		if inventory_panel:
+			if inventory_panel.socketing_workbench_panel:
+				inventory_panel.socketing_workbench_panel.close()
+			if inventory_panel.little_pocket_panel:
+				inventory_panel.little_pocket_panel.hide()
 		item_tooltip.hide_tooltip()
 		if NetworkClient.is_connected:
 			NetworkClient.send_raw("gskills")
@@ -1931,6 +2339,9 @@ func toggle_pickup_setting() -> void:
 		pickup_setting_panel.hide_panel()
 		_update_pickup_btn_style(false)
 	else:
+		if hook_setting_panel and hook_setting_panel.visible:
+			hook_setting_panel.hide_panel()
+			_update_hook_btn_style(false)
 		pickup_setting_panel.show_panel()
 		_update_pickup_btn_style(true)
 
@@ -1957,6 +2368,127 @@ func _update_pickup_btn_style(is_active: bool) -> void:
 			btn_p.remove_theme_stylebox_override("normal")
 			btn_p.remove_theme_color_override("font_color")
 
+func toggle_hook_setting() -> void:
+	if not hook_setting_panel:
+		return
+	if hook_setting_panel.visible:
+		hook_setting_panel.hide_panel()
+		_update_hook_btn_style(false)
+	else:
+		if pickup_setting_panel and pickup_setting_panel.visible:
+			pickup_setting_panel.hide_panel()
+			_update_pickup_btn_style(false)
+		if char_info_panel and char_info_panel.visible:
+			char_info_panel.close()
+		if skill_panel and skill_panel.visible:
+			skill_panel.close()
+		if cube_panel and cube_panel.visible:
+			cube_panel.visible = false
+		if gshop_panel and gshop_panel.visible:
+			gshop_panel.close()
+		hook_setting_panel.show_panel()
+		_update_hook_btn_style(true)
+
+func _update_hook_btn_style(is_active: bool) -> void:
+	if not control_matrix:
+		return
+	var btn_h = control_matrix.get_node_or_null("%BtnHook")
+	if btn_h:
+		if is_active:
+			var active_style = StyleBoxFlat.new()
+			active_style.bg_color = Color(0.15, 0.45, 0.6, 1.0)
+			active_style.border_width_left = 1
+			active_style.border_width_top = 1
+			active_style.border_width_right = 1
+			active_style.border_width_bottom = 1
+			active_style.border_color = Color(0.3, 0.75, 0.95, 1.0)
+			active_style.corner_radius_top_left = 2
+			active_style.corner_radius_top_right = 2
+			active_style.corner_radius_bottom_right = 2
+			active_style.corner_radius_bottom_left = 2
+			btn_h.add_theme_stylebox_override("normal", active_style)
+			btn_h.add_theme_color_override("font_color", Color(1, 1, 1, 1))
+		else:
+			btn_h.remove_theme_stylebox_override("normal")
+			btn_h.remove_theme_color_override("font_color")
+
 func _send_lpc_cmd(cmd: String) -> void:
 	if NetworkClient.is_connected:
 		NetworkClient.send_raw(cmd)
+
+## 渲染玩家当前召唤仆从聚合状态徽章 (复生骷髅、石魔等)
+func _update_summons_display(summons: Variant) -> void:
+	var viewport = get_node_or_null("MainHBox/LeftViewport")
+	var target_parent: Node = viewport if viewport != null else self
+
+	var box: VBoxContainer = target_parent.get_node_or_null("SummonsContainer") as VBoxContainer
+	if not box:
+		box = VBoxContainer.new()
+		box.name = "SummonsContainer"
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.layout_mode = 1
+		box.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		# 左边距 12.0，右边距 187.0，宽度精确对齐玩家队伍卡片(175px)
+		# 底部吸附在聊天视窗展开顶部(-285px)上方，预留 10px 黄金安全间距，彻底杜绝与聊天窗及血球重叠
+		box.offset_left = 12.0
+		box.offset_right = 187.0
+		box.offset_bottom = -295.0
+		box.offset_top = -415.0
+		box.z_index = 85
+		box.z_as_relative = false
+		target_parent.add_child(box)
+
+	for child in box.get_children():
+		child.queue_free()
+
+	if not summons is Array or summons.is_empty():
+		box.visible = false
+		return
+
+	var has_any = false
+	for s in summons:
+		if not s is Dictionary: continue
+		var count = _safe_int(s.get("count"), 0)
+		var max_count = _safe_int(s.get("max_count"), 0)
+		if count <= 0 and max_count <= 0: continue
+		has_any = true
+
+		var s_name = str(s.get("name", "仆从"))
+		var stype = str(s.get("type", ""))
+		var hp_pct = _safe_int(s.get("hp_pct"), 100)
+		var icon_sym = "💀"
+		if "golem" in stype: icon_sym = "🗿"
+		elif "wolf" in stype or "grizzly" in stype: icon_sym = "🐺"
+
+		var card = PanelContainer.new()
+		# 强制卡片宽度与玩家卡片(175px)严格等长
+		card.custom_minimum_size = Vector2(175, 24)
+
+		var sb = StyleBoxFlat.new()
+		sb.bg_color = Color(0.08, 0.075, 0.07, 0.94)
+		sb.border_width_left = 1
+		sb.border_width_top = 1
+		sb.border_width_right = 1
+		sb.border_width_bottom = 1
+		# 边框风格与玩家卡片统一：满额亮金，折损银灰
+		sb.border_color = Color(0.85, 0.72, 0.3, 0.95) if count >= max_count else Color(0.48, 0.44, 0.38, 0.8)
+		sb.corner_radius_top_left = 4
+		sb.corner_radius_top_right = 4
+		sb.corner_radius_bottom_right = 4
+		sb.corner_radius_bottom_left = 4
+		sb.content_margin_left = 6
+		sb.content_margin_right = 6
+		sb.content_margin_top = 3
+		sb.content_margin_bottom = 3
+		card.add_theme_stylebox_override("panel", sb)
+
+		var lbl = Label.new()
+		lbl.text = "%s %s: %d / %d (%d%%)" % [icon_sym, s_name, count, max_count, hp_pct]
+		lbl.add_theme_font_size_override("font_size", 11)
+		lbl.add_theme_color_override("font_color", Color(0.95, 0.85, 0.45) if count >= max_count else Color(0.85, 0.85, 0.85))
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		card.add_child(lbl)
+		box.add_child(card)
+
+	box.visible = has_any

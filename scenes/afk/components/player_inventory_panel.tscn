@@ -220,6 +220,8 @@ layout_mode = 2
 
 [node name="LittlePocketPanel" parent="." instance=ExtResource("6")]
 unique_name_in_owner = true
+z_index = 150
+z_as_relative = false
 visible = false
 layout_mode = 1
 offset_left = -176.0
@@ -229,11 +231,15 @@ offset_bottom = 480.0
 
 [node name="AddInventoryConfirmPanel" parent="." instance=ExtResource("7")]
 unique_name_in_owner = true
+z_index = 160
+z_as_relative = false
 visible = false
 layout_mode = 1
 
 [node name="SocketingWorkbenchPanel" parent="." instance=ExtResource("8")]
 unique_name_in_owner = true
+z_index = 150
+z_as_relative = false
 visible = false
 layout_mode = 1
 offset_left = -348.0

@@ -191,13 +191,26 @@ text = "地狱难度"
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Scroll" type="ScrollContainer" parent="MainLayout/RightPanel"]
+[node name="RightVBox" type="VBoxContainer" parent="MainLayout/RightPanel"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="CardList" type="VBoxContainer" parent="MainLayout/RightPanel/Scroll"]
+[node name="Scroll" type="ScrollContainer" parent="MainLayout/RightPanel/RightVBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="CardList" type="VBoxContainer" parent="MainLayout/RightPanel/RightVBox/Scroll"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 8
+
+[node name="BtnCreateChar" type="Button" parent="MainLayout/RightPanel/RightVBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 15
+text = "+ 创建新英雄"
 
 [node name="BottomBar" type="VBoxContainer" parent="."]
 layout_mode = 1
@@ -220,14 +233,22 @@ alignment = 1
 theme_override_constants/separation = 20
 
 [node name="BtnEnterGame" type="Button" parent="BottomBar/HBox"]
-custom_minimum_size = Vector2(280, 42)
+custom_minimum_size = Vector2(250, 42)
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
 theme_override_font_sizes/font_size = 17
 text = "进入庇护之地 (开始游戏)"
 
+[node name="BtnDeleteChar" type="Button" parent="BottomBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 42)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 15
+text = "注销英雄"
+
 [node name="BtnBack" type="Button" parent="BottomBar/HBox"]
-custom_minimum_size = Vector2(140, 42)
+custom_minimum_size = Vector2(110, 42)
 layout_mode = 2
 text = "返回登录"
 
@@ -236,3 +257,209 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 12
 text = "请选择你要出征的英雄"
 horizontal_alignment = 1
+
+[node name="CreateCharacterModal" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ModalMask" type="ColorRect" parent="CreateCharacterModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.75)
+
+[node name="Center" type="CenterContainer" parent="CreateCharacterModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ModalPanel" type="PanelContainer" parent="CreateCharacterModal/Center"]
+custom_minimum_size = Vector2(620, 420)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="CreateCharacterModal/Center/ModalPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="CreateCharacterModal/Center/ModalPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ModalTitle" type="Label" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 20
+text = "创 建 新 英 雄 · 踏 入 庇 护 之 地"
+horizontal_alignment = 1
+
+[node name="ClassHeader" type="Label" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "选择英雄职业："
+
+[node name="ClassGrid" type="HBoxContainer" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="GenderHBox" type="HBoxContainer" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="GenderLabel" type="Label" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/GenderHBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "英雄性别："
+
+[node name="GenderMale" type="CheckBox" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/GenderHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "男性"
+
+[node name="GenderFemale" type="CheckBox" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/GenderHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "女性"
+
+[node name="NameHBox" type="HBoxContainer" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="NameLabel" type="Label" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/NameHBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.9, 0.9, 1)
+theme_override_font_sizes/font_size = 14
+text = "角色姓名："
+
+[node name="CharNameInput" type="LineEdit" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/NameHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 36)
+layout_mode = 2
+placeholder_text = "请输入 2-4 位中文角色名"
+max_length = 12
+
+[node name="ModalErrorLabel" type="Label" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 20)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 13
+horizontal_alignment = 1
+
+[node name="ButtonHBox" type="HBoxContainer" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="BtnConfirmCreate" type="Button" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/ButtonHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
+theme_override_font_sizes/font_size = 15
+text = "踏入庇护之地"
+
+[node name="BtnCancelCreate" type="Button" parent="CreateCharacterModal/Center/ModalPanel/Margin/VBox/ButtonHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "取消"
+
+[node name="DeleteCharModal" type="Control" parent="."]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DeleteMask" type="ColorRect" parent="DeleteCharModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.8)
+
+[node name="Center" type="CenterContainer" parent="DeleteCharModal"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DeletePanel" type="PanelContainer" parent="DeleteCharModal/Center"]
+custom_minimum_size = Vector2(460, 240)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="DeleteCharModal/Center/DeletePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 20
+
+[node name="VBox" type="VBoxContainer" parent="DeleteCharModal/Center/DeletePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="DeleteTitle" type="Label" parent="DeleteCharModal/Center/DeletePanel/Margin/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.35, 0.35, 1)
+theme_override_font_sizes/font_size = 20
+text = "英 雄 注 销 确 认"
+horizontal_alignment = 1
+
+[node name="DeleteMsgLabel" type="Label" parent="DeleteCharModal/Center/DeletePanel/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 14
+text = "确定要永久注销该英雄吗？此操作无法撤销！"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[node name="ButtonHBox" type="HBoxContainer" parent="DeleteCharModal/Center/DeletePanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 24
+alignment = 1
+
+[node name="BtnConfirmDelete" type="Button" parent="DeleteCharModal/Center/DeletePanel/Margin/VBox/ButtonHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 40)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.4, 0.4, 1)
+theme_override_font_sizes/font_size = 15
+text = "确认注销"
+
+[node name="BtnCancelDelete" type="Button" parent="DeleteCharModal/Center/DeletePanel/Margin/VBox/ButtonHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 40)
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "取消"

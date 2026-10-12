@@ -52,15 +52,26 @@ func _ready() -> void:
 	var forward_can_drop = func(_at_pos, data): return _can_drop_data(_at_pos, data)
 	var forward_drop = func(_at_pos, data): _drop_data(_at_pos, data)
 	
+	set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
 	if equip_slot_btn:
 		equip_slot_btn.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
 	if tool_slot_btn:
 		tool_slot_btn.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
 	if sockets_grid:
 		sockets_grid.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
+	_setup_passive_mouse_filter(self)
 		
 	_init_confirm_dialog()
 	_render_empty_state()
+
+func _setup_passive_mouse_filter(node: Node) -> void:
+	for child in node.get_children():
+		if child is Label or child is RichTextLabel or child is HSeparator:
+			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		elif child is Container and child != sockets_grid:
+			if child.mouse_filter == Control.MOUSE_FILTER_STOP:
+				child.mouse_filter = Control.MOUSE_FILTER_PASS
+		_setup_passive_mouse_filter(child)
 
 func _init_confirm_dialog() -> void:
 	if _confirm_dialog == null:
@@ -212,6 +223,9 @@ func _render_sockets_grid(sock_count: int, inlays: Array) -> void:
 			
 		var slot_p = PanelContainer.new()
 		slot_p.custom_minimum_size = Vector2(40, 52)
+		var forward_can_drop = func(_at_pos, data): return _can_drop_data(_at_pos, data)
+		var forward_drop = func(_at_pos, data): _drop_data(_at_pos, data)
+		slot_p.set_drag_forwarding(Callable(), forward_can_drop, forward_drop)
 		
 		var slot_style = StyleBoxFlat.new()
 		slot_style.set_corner_radius_all(4)
@@ -232,11 +246,13 @@ func _render_sockets_grid(sock_count: int, inlays: Array) -> void:
 		var v_box = VBoxContainer.new()
 		v_box.alignment = BoxContainer.ALIGNMENT_CENTER
 		v_box.add_theme_constant_override("separation", 1)
+		v_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		
 		var num_lbl = Label.new()
 		num_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		num_lbl.add_theme_font_size_override("font_size", 9)
 		num_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
+		num_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		num_lbl.text = "%d孔" % (i + 1)
 		v_box.add_child(num_lbl)
 		
@@ -244,6 +260,7 @@ func _render_sockets_grid(sock_count: int, inlays: Array) -> void:
 		icon_rect.custom_minimum_size = Vector2(24, 24)
 		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		
 		if is_inlaid:
 			var in_tex = AnsiHelper.load_item_texture(inlay_raw)

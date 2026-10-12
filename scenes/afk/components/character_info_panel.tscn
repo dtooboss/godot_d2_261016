@@ -1034,6 +1034,7 @@ text = "0%"
 horizontal_alignment = 2
 
 [node name="H_Crit" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+visible = false
 layout_mode = 2
 
 [node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_Crit"]
@@ -1050,6 +1051,7 @@ text = "0%"
 horizontal_alignment = 2
 
 [node name="H_CritDmg" type="HBoxContainer" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox"]
+visible = false
 layout_mode = 2
 
 [node name="T" type="Label" parent="MainHBox/RightCard/RightMargin/RightVBox/Scroll/StatVBox/H_CritDmg"]

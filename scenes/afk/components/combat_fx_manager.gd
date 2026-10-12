@@ -71,6 +71,16 @@ func play_combat_fx(
 	var fx_type = fx_type_override if not fx_type_override.is_empty() else _detect_fx_type(skill_code, elem)
 	
 	match fx_type:
+		"charged_strike":
+			_spawn_charged_strike(target_pos, col, on_hit, is_crit)
+		"lightning_fury":
+			_spawn_lightning_fury(actual_start, actual_target, col, on_hit, is_crit, is_from_player)
+		"lightning_strike":
+			_spawn_lightning_strike(target_pos, col, on_hit, is_crit)
+		"lightning_javelin":
+			_spawn_lightning_javelin(actual_start, actual_target, col, on_hit, is_crit, is_from_player)
+		"spear_thrust":
+			_spawn_spear_thrust(target_pos, col, on_hit, is_crit)
 		"lightning":
 			_spawn_lightning(actual_start, actual_target, col, on_hit, is_crit)
 		"melee":
@@ -415,10 +425,127 @@ func _get_element_color(elem: String, skill_code: String = "") -> Color:
 			return ELEMENT_COLORS[k]
 	return ELEMENT_COLORS["物理"]
 
-## 工具函数：推断特效表现类型 (支持 hammer/arrow/spike/orb/lightning/melee)
+## 5. 亚马逊·充能一击 (Charged Strike)：近身刺击 + 炸裂多道蜿蜒窜动的电荷弹
+func _spawn_charged_strike(target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool) -> void:
+	_spawn_spear_thrust(target_pos, color, on_hit, is_crit)
+	
+	# 从受击中心向四周辐射喷射 6 道乱窜的银白高能电荷弹
+	var bolt_count = 6
+	for b in range(bolt_count):
+		var base_angle = float(b) * (TAU / float(bolt_count)) + randf_range(-0.35, 0.35)
+		var rad_dir = Vector2.RIGHT.rotated(base_angle)
+		var travel_dist = randf_range(45.0, 75.0)
+		
+		var bolt_line = Line2D.new()
+		bolt_line.material = _additive_material
+		bolt_line.default_color = Color(1.3, 1.4, 1.8, 0.95)
+		bolt_line.width = 2.2 if is_crit else 1.6
+		bolt_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		bolt_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+		add_child(bolt_line)
+		
+		# 3段蜿蜒游走路径点
+		var pt0 = target_pos
+		var pt1 = pt0 + rad_dir * (travel_dist * 0.45) + rad_dir.orthogonal() * randf_range(-12.0, 12.0)
+		var pt2 = pt0 + rad_dir * travel_dist + rad_dir.orthogonal() * randf_range(-8.0, 8.0)
+		bolt_line.add_point(pt0)
+		bolt_line.add_point(pt1)
+		bolt_line.add_point(pt2)
+		
+		var tw = create_tween().bind_node(bolt_line)
+		tw.tween_property(bolt_line, "modulate:a", 0.0, 0.16).set_ease(Tween.EASE_IN)
+		tw.tween_callback(bolt_line.queue_free)
+
+## 6. 亚马逊·雷霆之怒 (Lightning Fury)：雷神之矛飞掷 + 环状全屏群雷暴轰
+func _spawn_lightning_fury(start_pos: Vector2, target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool, is_from_player: bool) -> void:
+	# 阶段 1: 投掷实体高能闪电标枪
+	var on_fury_impact = func():
+		if on_hit.is_valid():
+			on_hit.call()
+		# 阶段 2: 目标处剧烈雷核核爆 + 向全屏四周爆发 10 道放射状折线雷霆
+		_spawn_hit_impact(target_pos, Color(1.5, 1.6, 2.0), true)
+		
+		var ray_count = 10
+		for r in range(ray_count):
+			var angle = float(r) * (TAU / float(ray_count)) + randf_range(-0.25, 0.25)
+			var ray_dir = Vector2.RIGHT.rotated(angle)
+			var ray_len = randf_range(80.0, 140.0)
+			var ray_end = target_pos + ray_dir * ray_len
+			
+			var ray_line = Line2D.new()
+			ray_line.material = _additive_material
+			ray_line.default_color = Color(1.4, 1.5, 1.8, 0.9)
+			ray_line.width = 3.2 if is_crit else 2.2
+			ray_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+			ray_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+			add_child(ray_line)
+			
+			# 生成折线
+			ray_line.add_point(target_pos)
+			var mid1 = target_pos + ray_dir * (ray_len * 0.35) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
+			var mid2 = target_pos + ray_dir * (ray_len * 0.70) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
+			ray_line.add_point(mid1)
+			ray_line.add_point(mid2)
+			ray_line.add_point(ray_end)
+			
+			var tw = create_tween().bind_node(ray_line)
+			tw.tween_property(ray_line, "modulate:a", 0.0, 0.12).set_ease(Tween.EASE_IN)
+			tw.tween_callback(ray_line.queue_free)
+
+	_spawn_projectile(start_pos, target_pos, "spike", Color(1.3, 1.4, 1.8), on_fury_impact, is_crit, is_from_player)
+
+## 7. 亚马逊·闪电标枪 (Lightning Bolt)：高光电弧缠绕的实体长矛投掷
+func _spawn_lightning_javelin(start_pos: Vector2, target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool, is_from_player: bool) -> void:
+	_spawn_projectile(start_pos, target_pos, "spike", Color(1.4, 1.4, 1.9), on_hit, is_crit, is_from_player)
+
+## 8. 亚马逊·闪电攻击 (Lightning Strike)：近身戳刺 + 连环闪电弹射
+func _spawn_lightning_strike(target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool) -> void:
+	_spawn_spear_thrust(target_pos, color, on_hit, is_crit)
+	
+	# 从击中点向周围 3 个方向蔓延出弹射闪电
+	for c in range(3):
+		var spread_pos = target_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-60.0, 60.0))
+		_spawn_lightning(target_pos, spread_pos, Color(1.2, 1.3, 1.7), Callable(), is_crit)
+
+## 9. 长矛/标枪专属直刺突击 (Spear Thrust - 区别于横向弧斩的纵向刺击)
+func _spawn_spear_thrust(target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool) -> void:
+	var thrust = Node2D.new()
+	thrust.global_position = target_pos
+	thrust.rotation = randf_range(-0.15, 0.15)
+	add_child(thrust)
+	
+	var sp = Sprite2D.new()
+	sp.texture = FX_SPIKE_TEX
+	sp.material = _additive_material
+	sp.modulate = Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, 0.95)
+	sp.scale = Vector2(0.2, 0.45) if is_crit else Vector2(0.15, 0.35)
+	thrust.add_child(sp)
+	
+	_spawn_hit_impact(target_pos, color, is_crit)
+	if on_hit.is_valid():
+		on_hit.call()
+		
+	var tw = create_tween().bind_node(thrust)
+	tw.tween_property(sp, "scale:y", sp.scale.y * 1.35, 0.05).set_ease(Tween.EASE_OUT)
+	tw.tween_property(sp, "modulate:a", 0.0, 0.06)
+	tw.tween_callback(thrust.queue_free)
+
+## 工具函数：推断特效表现类型 (支持专属技能分流 + hammer/arrow/spike/orb/lightning/melee)
 func _detect_fx_type(skill_code: String, elem: String) -> String:
 	var sk = skill_code.to_lower()
 	
+	# 0. 亚马逊专属标枪电系特征细化分流
+	if sk == "charged_strike":
+		return "charged_strike" # 充能一击：刺击 + 炸出多道乱窜电荷弹
+	if sk == "lightning_fury":
+		return "lightning_fury" # 雷霆之怒：雷霆神矛投掷 + 全屏群雷环形炸裂
+	if sk == "lightning_strike":
+		return "lightning_strike" # 闪电攻击：刺击 + 连锁闪电弹射
+	if sk == "lightning_bolt":
+		return "lightning_javelin" # 闪电标枪：实体高光电弧标枪贯穿投掷
+	if sk in ["power_strike", "jab", "fend", "impale"]:
+		return "spear_thrust" # 近战长矛/标枪迅捷戳刺
+		
 	# 1. 战锤型
 	if "hammer" in sk:
 		return "hammer"
@@ -436,7 +563,7 @@ func _detect_fx_type(skill_code: String, elem: String) -> String:
 		return "spike"
 		
 	# 5. 经典近战或普通挥击判定
-	if sk in ["attack", "frenzy", "zeal", "bash", "stun", "concentrate", "smite", "berserk", "venom", "jab", "fend", "impale"]:
+	if sk in ["attack", "frenzy", "zeal", "bash", "stun", "concentrate", "smite", "berserk", "venom"]:
 		return "melee"
 		
 	# 6. 法球/火球/冰弹/其它

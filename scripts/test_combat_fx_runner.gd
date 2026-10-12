@@ -60,6 +60,28 @@ func _ready():
 	await get_tree().create_timer(0.25).timeout
 	assert(hit_box[0] == 6, "Bone Spear Spike FX should trigger on_hit on arrival")
 	print("PASS: Bone Spear Spike FX verified!")
+
+	# 测试亚马逊充能一击 (Charged Strike: 近身戳刺 + 6道电荷弹炸裂)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(200, 200), "charged_strike", "电", on_hit, false)
+	assert(hit_box[0] == 7, "Charged Strike should trigger on_hit immediately")
+	print("PASS: Amazon Charged Strike FX verified!")
+
+	# 测试亚马逊雷霆之怒 (Lightning Fury: 投掷神矛 + 环形万雷齐发)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(280, 280), "lightning_fury", "电", on_hit, true)
+	await get_tree().create_timer(0.25).timeout
+	assert(hit_box[0] == 8, "Lightning Fury should trigger on_hit on impact")
+	print("PASS: Amazon Lightning Fury Radial Burst FX verified!")
+
+	# 测试亚马逊闪电攻击 (Lightning Strike: 刺击 + 连锁弹射)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(210, 210), "lightning_strike", "电", on_hit, false)
+	assert(hit_box[0] == 9, "Lightning Strike should trigger on_hit immediately")
+	print("PASS: Amazon Lightning Strike Chain FX verified!")
+
+	# 测试亚马逊闪电标枪 (Lightning Bolt: 实体电矛贯穿飞行)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(260, 260), "lightning_bolt", "电", on_hit, false)
+	await get_tree().create_timer(0.25).timeout
+	assert(hit_box[0] == 10, "Lightning Bolt Javelin should trigger on_hit on arrival")
+	print("PASS: Amazon Lightning Javelin FX verified!")
 	
 	print("=== ALL COMBAT FX & TIMING TESTS PASSED! ===")
 	get_tree().quit(0)

@@ -28,6 +28,8 @@ corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
 [node name="CollapsibleChatPanel" type="Control"]
+z_index = 80
+z_as_relative = false
 custom_minimum_size = Vector2(280, 24)
 layout_mode = 3
 anchors_preset = 0

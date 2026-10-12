@@ -5,3 +5,10 @@
 # System/tool junk
 .DS_Store
 *.tmp
+*.bak
+*.bak_*
+*.bak.*
+*.bak2
+*.bak3
+*.bak4
+*.bak5

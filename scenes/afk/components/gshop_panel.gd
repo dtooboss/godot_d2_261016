@@ -11,8 +11,8 @@ signal item_unhovered()
 signal closed()
 
 const COLS: int = 4
-const ROWS: int = 7
-const TOTAL_SLOTS: int = COLS * ROWS # 28 格
+const ROWS: int = 10
+const TOTAL_SLOTS: int = COLS * ROWS # 40 格
 
 # 内部节点
 var _title_label: Label
@@ -30,6 +30,7 @@ var _qty_input: LineEdit
 var _qty_total_price: Label
 var _btn_confirm_buy: Button
 var _current_modal_item: Dictionary = {}
+var _qty_preset_btns: Dictionary = {} # 档位 -> Button (弹窗按商品类型切换 2/50 档可见性)
 var _current_modal_qty: int = 1
 
 # 数据状态
@@ -268,7 +269,7 @@ func _build_qty_modal() -> void:
 	quick_row.add_theme_constant_override("separation", 4)
 	mvbox.add_child(quick_row)
 
-	for q in [1, 10, 50]:
+	for q in [1, 2, 10, 50]:
 		var q_btn := Button.new()
 		q_btn.text = str(q)
 		q_btn.custom_minimum_size = Vector2(36, 22)
@@ -277,6 +278,8 @@ func _build_qty_modal() -> void:
 		q_btn.pressed.connect(func(): _set_modal_qty(q))
 		_style_dialog_button(q_btn)
 		quick_row.add_child(q_btn)
+		if q == 2 or q == 50:
+			_qty_preset_btns[q] = q_btn
 
 	var btn_max := Button.new()
 	btn_max.text = "最大"
@@ -321,7 +324,7 @@ func _build_qty_modal() -> void:
 
 func update_shop_data(data: Dictionary) -> void:
 	current_diff = str(data.get("difficulty", "normal")).to_lower()
-	current_gold = int(data.get("gold", 0))
+	current_gold = _safe_int(data.get("gold"), 0)
 	shop_items = data.get("items", [])
 
 	_update_header()
@@ -424,6 +427,12 @@ func _open_qty_modal(item_data: Dictionary) -> void:
 	_current_modal_item = item_data
 	var code = str(item_data.get("code", ""))
 	var item_type = str(item_data.get("type", "hp"))
+	# 符文/弹药类贵重品隐藏 50 档预设, 显示 2 档; 药水反之
+	var is_bulk_type = item_type in ["hp", "mp"]
+	if _qty_preset_btns.has(50):
+		_qty_preset_btns[50].visible = is_bulk_type
+	if _qty_preset_btns.has(2):
+		_qty_preset_btns[2].visible = not is_bulk_type
 
 	# 默认数量：药水默认 50，弹药默认 1
 	_current_modal_qty = 50 if item_type in ["hp", "mp"] else 1
@@ -558,3 +567,17 @@ static func _format_number(n: int) -> String:
 		if cnt % 3 == 0 and i > 0:
 			res = "," + res
 	return res
+
+static func _safe_int(val, default_val: int = 0) -> int:
+	if val == null:
+		return default_val
+	if val is int:
+		return val
+	if val is float:
+		return int(val)
+	if val is String:
+		return int(val) if val.is_valid_int() else default_val
+	if val is bool:
+		return 1 if val else 0
+	return default_val
+
