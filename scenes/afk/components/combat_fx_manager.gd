@@ -31,6 +31,9 @@ const ELEMENT_COLORS = {
 # 默认发光材质 (Additive 混合模式，赋予暗黑魔法通透质感)
 var _additive_material: CanvasItemMaterial = null
 
+# ========== P1.2 看门狗：命中冲击帧超时未回收则强制回收 (tween 丢失自愈) ==========
+var _active_impacts: Array = []   # 正在播放的命中冲击 (含 400ms 过期戳)
+
 # ========== P1.1 对象池 (2026-10-13)：弹道对(proj+trail)与命中冲击复用，杜绝高频 new/free ==========
 const POOL_CAP_PER_TYPE := 8    # 每形态池上限，超出直接释放
 const IMPACT_POOL_CAP := 12     # 命中冲击池上限
@@ -76,6 +79,25 @@ func _init() -> void:
 
 func _ready() -> void:
 	z_index = 10 # 确保处于怪物本体上方、HUD 界面下方
+
+func _process(_delta: float) -> void:
+	# 看门狗: tween 回调丢失 (重载卡顿/外部清理) 时, 超时冲击帧强制回收
+	if _active_impacts.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	var i := _active_impacts.size() - 1
+	while i >= 0:
+		var im = _active_impacts[i]
+		if not is_instance_valid(im):
+			_active_impacts.remove_at(i)
+		elif not im.visible:
+			_active_impacts.remove_at(i) # tween 已正常回收
+		elif im.get_meta("expire", 0) < now:
+			im.visible = false
+			if _impact_pool.size() < IMPACT_POOL_CAP:
+				_impact_pool.append(im)
+			_active_impacts.remove_at(i)
+		i -= 1
 
 ## 统一对外调度入口 (支持形态分类、数量阵列、玩家与怪物双轨分流)
 func play_combat_fx(
@@ -672,6 +694,8 @@ func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool) -> void:
 	if impact.get_parent() == null:
 		add_child(impact)
 	impact.global_position = pos
+	impact.set_meta("expire", Time.get_ticks_msec() + 400)
+	_active_impacts.append(impact)
 	impact.modulate = Color(min(color.r * 1.5, 2.0), min(color.g * 1.5, 2.0), min(color.b * 1.5, 2.0), 1.0)
 	var start_s = Vector2(0.12, 0.12)
 	var end_s = Vector2(0.55, 0.55) if is_crit else Vector2(0.36, 0.36)
