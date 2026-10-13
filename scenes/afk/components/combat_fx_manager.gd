@@ -704,12 +704,13 @@ func _spawn_ground_fx(kind: String, pos: Vector2, radius: float, dur: float, col
 		decal = Sprite2D.new()
 		decal.texture = FX_FLARE_TEX
 		decal.material = _additive_material
-	add_child(decal)
+	if decal.get_parent() == null:
+		add_child(decal)
 	decal.global_position = pos
 	decal.modulate = Color(gcol.r, gcol.g, gcol.b, 0.0)
 	decal.scale = Vector2.ONE * (radius / 96.0)
 	decal.rotation = randf_range(0.0, TAU)
-	z_index = -20 # 地面层：相对弹道层压到最底
+	decal.z_index = -20 # 地面层：相对弹道层压到最底
 
 	var tw = create_tween().bind_node(decal)
 	tw.set_parallel(true)
