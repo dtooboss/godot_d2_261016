@@ -31,73 +31,12 @@ const ELEMENT_COLORS = {
 # 默认发光材质 (Additive 混合模式，赋予暗黑魔法通透质感)
 var _additive_material: CanvasItemMaterial = null
 
-# ========== P1.2 看门狗：命中冲击帧超时未回收则强制回收 (tween 丢失自愈) ==========
-var _active_impacts: Array = []   # 正在播放的命中冲击 (含 400ms 过期戳)
-
-# ========== P1.1 对象池 (2026-10-13)：弹道对(proj+trail)与命中冲击复用，杜绝高频 new/free ==========
-const POOL_CAP_PER_TYPE := 8    # 每形态池上限，超出直接释放
-const IMPACT_POOL_CAP := 12     # 命中冲击池上限
-var _proj_pool: Dictionary = {}      # fx_type -> Array[{proj:Node2D, trail:Line2D}]
-var _impact_pool: Array = []         # 回收的 flare Sprite2D
-var _live_count := 0                 # 同屏活跃弹道 (超 30 兜底直收)
-var _live_proj_list: Array = []      # 活跃弹道队列 (超限回收最旧)
-
-# ========== P1.4 技能→形态规则表 (数据化，新技能加一行即接入) ==========
-const SKILL_FX_TABLE := {
-	"charged_strike": "charged_strike",
-	"lightning_fury": "lightning_fury",
-	"lightning_strike": "lightning_strike",
-	"lightning_bolt": "lightning_javelin",
-	"power_strike": "spear_thrust", "jab": "spear_thrust", "fend": "spear_thrust", "impale": "spear_thrust",
-	"bone_spear": "spike", "bone_spirit": "orb", "poison_dagger": "melee",
-	"fire_ball": "orb", "meteor": "orb", "fire_trap": "orb", "enchant": "orb",
-	"blizzard": "orb", "frozen_orb": "orb", "ice_bolt": "spike", "glacial_spike": "spike",
-	"frozen_armor": "orb", "shiver_armor": "orb", "chilling_armor": "orb",
-	"poison_explosion": "orb", "poison_nova": "orb", "poison_javelin": "spear_thrust",
-	"multiple_shot": "arrow", "strafe": "arrow", "guided_arrow": "arrow", "cold_arrow": "arrow",
-	"fire_arrow": "arrow", "immolation_arrow": "arrow", "magic_arrow": "arrow",
-	"holy_bolt": "orb", "fist_of_the_heavens": "lightning_strike",
-	"teeth": "spike", "corpse_explosion": "orb",
-	"whirlwind": "melee", "frenzy": "melee", "zeal": "melee", "bash": "melee",
-	"stun": "melee", "concentrate": "melee", "smite": "melee", "berserk": "melee",
-	"double_swing": "melee", "double_throw": "arrow",
-}
-
-# 地面残留技能 (命中/施放时在目标点铺持续层)
-const GROUND_SKILLS := {
-	"fire_wall": {"kind": "fire", "radius": 90.0, "dur": 5.0},
-	"meteor": {"kind": "fire", "radius": 70.0, "dur": 2.5},
-	"poison_nova": {"kind": "poison", "radius": 110.0, "dur": 4.0},
-	"poison_explosion": {"kind": "poison", "radius": 80.0, "dur": 3.0},
-	"blizzard": {"kind": "ice", "radius": 120.0, "dur": 4.0},
-	"frozen_orb": {"kind": "ice", "radius": 70.0, "dur": 2.0},
-}
-
 func _init() -> void:
 	_additive_material = CanvasItemMaterial.new()
 	_additive_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 
 func _ready() -> void:
 	z_index = 10 # 确保处于怪物本体上方、HUD 界面下方
-
-func _process(_delta: float) -> void:
-	# 看门狗: tween 回调丢失 (重载卡顿/外部清理) 时, 超时冲击帧强制回收
-	if _active_impacts.is_empty():
-		return
-	var now := Time.get_ticks_msec()
-	var i := _active_impacts.size() - 1
-	while i >= 0:
-		var im = _active_impacts[i]
-		if not is_instance_valid(im):
-			_active_impacts.remove_at(i)
-		elif not im.visible:
-			_active_impacts.remove_at(i) # tween 已正常回收
-		elif im.get_meta("expire", 0) < now:
-			im.visible = false
-			if _impact_pool.size() < IMPACT_POOL_CAP:
-				_impact_pool.append(im)
-			_active_impacts.remove_at(i)
-		i -= 1
 
 ## 统一对外调度入口 (支持形态分类、数量阵列、玩家与怪物双轨分流)
 func play_combat_fx(
@@ -129,17 +68,8 @@ func play_combat_fx(
 	var actual_start = start_pos + offset
 	var actual_target = target_pos + offset
 
-	var fx_type = fx_type_override if not fx_type_override.is_empty() else _lookup_fx_type(skill_code, elem)
-
-	# P1.3 地面残留层 (火焰墙/毒云/冰霜等持续区域，铺在弹道层之下)
-	if GROUND_SKILLS.has(skill_code):
-		var g: Dictionary = GROUND_SKILLS[skill_code]
-		_spawn_ground_fx(str(g["kind"]), target_pos, float(g["radius"]), float(g["dur"]), col)
-
-	# P1.1 池化兜底：同屏活跃弹道超限回收最旧
-	if _live_count >= 30:
-		_recycle_oldest_projectile()
-
+	var fx_type = fx_type_override if not fx_type_override.is_empty() else _detect_fx_type(skill_code, elem)
+	
 	match fx_type:
 		"charged_strike":
 			_spawn_charged_strike(target_pos, col, on_hit, is_crit)
@@ -171,7 +101,7 @@ func play_combat_fx(
 					var sub_on_hit = on_hit if i == int(half_spread) else Callable()
 					_spawn_projectile(actual_start, sub_target, fx_type, col, sub_on_hit, is_crit, is_from_player)
 
-## 1. 动态飞行物弹道 (对象池复用版：按 fx_type 池化 proj+trail 对，杜绝高频 new/free)
+## 1. 动态飞行物弹道 (形态分类、流光彗尾、战锤自转、白炽光核)
 func _spawn_projectile(
 	start_pos: Vector2,
 	target_pos: Vector2,
@@ -181,49 +111,86 @@ func _spawn_projectile(
 	is_crit: bool,
 	is_from_player: bool
 ) -> void:
-	_live_count += 1
-	var e: Dictionary = _acquire_projectile(fx_type)
-	var proj: Node2D = e["proj"]
-	var trail: Line2D = e["trail"]
-	_live_proj_list.append({"fx": fx_type, "proj": proj, "trail": trail})
-	var sp: Sprite2D = e["sp"]
-	var tex: Texture2D = e["tex"]
-
-	var base_scale: Vector2 = e["scale"] * (1.3 if is_crit else 1.0)
-	var is_rotating: bool = e["rot"]
-	# 每次发射重置可见性与颜色 (池化节点复用)
-	proj.visible = true
-	proj.modulate = Color(1, 1, 1, 1)
-	trail.visible = true
-	trail.modulate = Color(1, 1, 1, 1)
+	var proj = Node2D.new()
+	proj.global_position = start_pos
+	add_child(proj)
+	
+	# 选择对应形态剪影贴图与缩放比例
+	var tex = FX_ORB_TEX
+	var base_scale = Vector2(0.28, 0.28)
+	var is_rotating = false
+	var use_trail = true
+	
+	match fx_type:
+		"hammer":
+			tex = FX_HAMMER_TEX
+			base_scale = Vector2(0.32, 0.32)
+			is_rotating = true
+			color = Color(1.15, 0.95, 0.50, 1.0) # 圣光专属白金色
+		"arrow":
+			tex = FX_ARROW_TEX
+			base_scale = Vector2(0.34, 0.34)
+		"spike":
+			tex = FX_SPIKE_TEX
+			base_scale = Vector2(0.35, 0.35)
+		"orb":
+			tex = FX_ORB_TEX
+			base_scale = Vector2(0.30, 0.30)
+		_:
+			tex = ATTACK_EFFECT_TEX
+			base_scale = Vector2(0.38, 0.22)
+	
+	if is_crit:
+		base_scale *= 1.3
+		
+	# 主光核精灵 (Additive 发光)
+	var sp = Sprite2D.new()
+	sp.texture = tex
+	sp.material = _additive_material
 	sp.modulate = color
 	sp.scale = base_scale
-	proj.global_position = start_pos
-
-	# 流光彗尾渐变按元素色重置
-	if trail.gradient:
-		trail.gradient.set_color(0, Color(color.r * 0.8, color.g * 0.8, color.b * 0.8, 0.0))
-		trail.gradient.set_color(1, Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 0.9))
-		trail.width = 8.5 if is_crit else 6.0
+	proj.add_child(sp)
+	
+	# 炽白能量内核 (赋予火球/箭尖/战锤高能白炽光感)
+	var core_sp = Sprite2D.new()
+	core_sp.texture = tex
+	core_sp.material = _additive_material
+	core_sp.modulate = Color(1.0, 1.0, 1.0, 0.85)
+	core_sp.scale = base_scale * 0.65
+	proj.add_child(core_sp)
+	
+	# 流光彗尾 Line2D (动态沿轨迹拉伸出由粗变细、由亮变透的流光带)
+	var trail: Line2D = null
+	if use_trail:
+		trail = Line2D.new()
+		trail.material = _additive_material
+		trail.width = 6.0 if not is_crit else 8.5
+		trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		trail.end_cap_mode = Line2D.LINE_CAP_ROUND
+		
+		var grad = Gradient.new()
+		grad.set_color(0, Color(color.r * 0.8, color.g * 0.8, color.b * 0.8, 0.0))
+		grad.set_color(1, Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 0.9))
+		trail.gradient = grad
+		add_child(trail)
 
 	var dist = start_pos.distance_to(target_pos)
-
+	
 	if is_from_player:
 		# 玩家弹道：笔直迅捷疾冲
 		if not is_rotating:
 			proj.look_at(target_pos)
-
+			
 		var dur = clamp(dist / 1450.0, 0.09, 0.17)
 		var tw = create_tween().bind_node(proj)
-		e["tween"] = tw
 		tw.set_ease(Tween.EASE_OUT)
-
+		
 		tw.tween_method(
 			_update_projectile_straight.bind(proj, sp, trail, start_pos, target_pos, is_rotating, base_scale),
 			0.0, 1.0, dur
 		)
 		tw.tween_callback(
-			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail, fx_type)
+			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail)
 		)
 	else:
 		# 怪物弹道：带自然的贝塞尔微抛物线弧度，切线自适应转向
@@ -232,18 +199,17 @@ func _spawn_projectile(
 		var d = p2 - p0
 		var norm = Vector2(-d.y, d.x).normalized()
 		var p1 = (p0 + p2) * 0.5 + norm * -25.0
-
+		
 		var dur = clamp(dist / 1150.0, 0.12, 0.22)
 		var tw = create_tween().bind_node(proj)
-		e["tween"] = tw
 		tw.set_ease(Tween.EASE_OUT)
-
+		
 		tw.tween_method(
 			_update_projectile_curved.bind(proj, trail, p0, p1, p2, is_rotating),
 			0.0, 1.0, dur
 		)
 		tw.tween_callback(
-			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail, fx_type)
+			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail)
 		)
 
 func _update_projectile_straight(
@@ -309,108 +275,20 @@ func _on_projectile_arrived(
 	is_crit: bool,
 	on_hit: Callable,
 	proj: Node2D,
-	trail: Line2D,
-	fx_type: String
+	trail: Line2D
 ) -> void:
 	_spawn_hit_impact(target_pos, color, is_crit)
 	if on_hit.is_valid():
 		on_hit.call()
-
-	# 池化回收 (替代 queue_free)
-	_live_count = max(0, _live_count - 1)
-	_release_projectile(fx_type, proj, trail)
-
-## 池化：按 fx_type 取出复用对，池空则新建 (建一次终身复用)
-func _acquire_projectile(fx_type: String) -> Dictionary:
-	var arr: Array = _proj_pool.get(fx_type, [])
-	# 自愈: 池内节点可能被外部 (场景切换清理等) 释放, 逐个校验只取活节点
-	while arr.size() > 0:
-		var e: Dictionary = arr.pop_back()
-		_proj_pool[fx_type] = arr
-		if is_instance_valid(e["proj"]) and is_instance_valid(e["trail"]):
-			return e
-	return _build_new_projectile(fx_type)
-
-func _build_new_projectile(fx_type: String) -> Dictionary:
-	var tex: Texture2D = FX_ORB_TEX
-	var base_scale := Vector2(0.30, 0.30)
-	var is_rotating := false
-	match fx_type:
-		"hammer":
-			tex = FX_HAMMER_TEX
-			base_scale = Vector2(0.32, 0.32)
-			is_rotating = true
-		"arrow":
-			tex = FX_ARROW_TEX
-			base_scale = Vector2(0.34, 0.34)
-		"spike":
-			tex = FX_SPIKE_TEX
-			base_scale = Vector2(0.35, 0.35)
-		"orb":
-			tex = FX_ORB_TEX
-			base_scale = Vector2(0.30, 0.30)
-		_:
-			tex = ATTACK_EFFECT_TEX
-			base_scale = Vector2(0.38, 0.22)
-
-	var proj = Node2D.new()
-	add_child(proj)
-	var sp = Sprite2D.new()
-	sp.texture = tex
-	sp.material = _additive_material
-	proj.add_child(sp)
-	var core_sp = Sprite2D.new()
-	core_sp.texture = tex
-	core_sp.material = _additive_material
-	core_sp.modulate = Color(1.0, 1.0, 1.0, 0.85)
-	core_sp.scale = base_scale * 0.65
-	proj.add_child(core_sp)
-	var trail = Line2D.new()
-	trail.material = _additive_material
-	trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
-	trail.end_cap_mode = Line2D.LINE_CAP_ROUND
-	add_child(trail)
-
-	var entry := {"proj": proj, "trail": trail, "sp": sp, "tex": tex, "scale": base_scale,
-		"rot": is_rotating, "tween": null}
-	proj.set_meta("pool_entry", entry)
-	return entry
-
-## 池化：归还复用对 (超上限才真正释放)
-func _release_projectile(fx_type: String, proj: Node2D, trail: Line2D) -> void:
+		
 	if is_instance_valid(proj):
-		proj.visible = false
+		proj.queue_free()
+		
+	# 尾迹残留 0.06s 迅速淡出
 	if trail and is_instance_valid(trail):
-		trail.visible = false
-		trail.clear_points()
-	if not is_instance_valid(proj):
-		return
-	var arr: Array = _proj_pool.get(fx_type, [])
-	var entry: Dictionary = proj.get_meta("pool_entry", {"proj": proj, "trail": trail})
-	entry["proj"] = proj
-	entry["trail"] = trail
-	if arr.has(entry):
-		return  # 防双入池
-	if entry.has("tween") and entry["tween"] != null and entry["tween"].is_valid():
-		entry["tween"].kill()
-	entry["tween"] = null
-	if arr.size() < POOL_CAP_PER_TYPE:
-		arr.append(entry)
-		_proj_pool[fx_type] = arr
-	else:
-		proj.set_meta("pool_entry", null)
-		if is_instance_valid(proj): proj.queue_free()
-		if trail and is_instance_valid(trail): trail.queue_free()
-
-## 池化兜底：同屏弹道超限时强制回收最旧一只 (直接进池)
-func _recycle_oldest_projectile() -> bool:
-	if _live_proj_list.is_empty():
-		return false
-	var oldest: Dictionary = _live_proj_list.pop_front()
-	if is_instance_valid(oldest["proj"]):
-		_release_projectile(str(oldest["fx"]), oldest["proj"], oldest["trail"])
-	_live_count = max(0, _live_count - 1)
-	return true
+		var tw = create_tween().bind_node(trail)
+		tw.tween_property(trail, "modulate:a", 0.0, 0.06)
+		tw.tween_callback(trail.queue_free)
 
 ## 2. 即时纯正高亮银白电弧/连环闪电折线 (双层渲染：银白主芯 + 青紫电晕)
 func _spawn_lightning(
@@ -505,6 +383,24 @@ func _spawn_melee_slash(
 	tw.tween_callback(slash.queue_free)
 
 ## 4. 击中爆点微光 (Hit Impact - 星芒高光爆裂)
+func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool) -> void:
+	var impact = Sprite2D.new()
+	impact.global_position = pos
+	impact.texture = FX_FLARE_TEX
+	impact.material = _additive_material
+	impact.modulate = Color(color.r * 1.5, color.g * 1.5, color.b * 1.5, 1.0)
+	var start_s = Vector2(0.12, 0.12)
+	var end_s = Vector2(0.55, 0.55) if is_crit else Vector2(0.36, 0.36)
+	impact.scale = start_s
+	add_child(impact)
+	
+	var tw = create_tween().bind_node(impact)
+	tw.set_parallel(true)
+	tw.tween_property(impact, "scale", end_s, 0.09).set_ease(Tween.EASE_OUT)
+	tw.tween_property(impact, "rotation", randf_range(0.3, 0.8), 0.09)
+	tw.tween_property(impact, "modulate:a", 0.0, 0.10).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(impact.queue_free)
+
 ## 工具函数：推断元素色彩 (综合 elem 与 skill_code 原生属性，杜绝微小附魔词缀喧宾夺主)
 func _get_element_color(elem: String, skill_code: String = "") -> Color:
 	var sk = skill_code.to_lower()
@@ -635,13 +531,6 @@ func _spawn_spear_thrust(target_pos: Vector2, color: Color, on_hit: Callable, is
 	tw.tween_callback(thrust.queue_free)
 
 ## 工具函数：推断特效表现类型 (支持专属技能分流 + hammer/arrow/spike/orb/lightning/melee)
-## P1.4 规则表入口: 数据表优先, 关键词规则兜底
-func _lookup_fx_type(skill_code: String, elem: String) -> String:
-	var sk = skill_code.to_lower()
-	if SKILL_FX_TABLE.has(sk):
-		return SKILL_FX_TABLE[sk]
-	return _detect_fx_type(skill_code, elem)
-
 func _detect_fx_type(skill_code: String, elem: String) -> String:
 	var sk = skill_code.to_lower()
 	
@@ -679,70 +568,3 @@ func _detect_fx_type(skill_code: String, elem: String) -> String:
 		
 	# 6. 法球/火球/冰弹/其它
 	return "orb"
-
-## ========== P1.2 命中冲击 v2 (池化 flare + 程序化火花爆裂) ==========
-func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool) -> void:
-	var impact: Sprite2D
-	if _impact_pool.size() > 0:
-		impact = _impact_pool.pop_back()
-		impact.visible = true
-	else:
-		impact = Sprite2D.new()
-		impact.texture = FX_FLARE_TEX
-		impact.material = _additive_material
-		add_child(impact)
-	if impact.get_parent() == null:
-		add_child(impact)
-	impact.global_position = pos
-	impact.set_meta("expire", Time.get_ticks_msec() + 400)
-	_active_impacts.append(impact)
-	impact.modulate = Color(min(color.r * 1.5, 2.0), min(color.g * 1.5, 2.0), min(color.b * 1.5, 2.0), 1.0)
-	var start_s = Vector2(0.12, 0.12)
-	var end_s = Vector2(0.55, 0.55) if is_crit else Vector2(0.36, 0.36)
-	impact.scale = start_s
-
-## ========== P1.3 地面残留层 (火焰墙/毒云/冰霜 decal, z 低于怪物) ==========
-var _ground_pool: Array = []
-var _active_ground := 0
-
-func _spawn_ground_fx(kind: String, pos: Vector2, radius: float, dur: float, col: Color) -> void:
-	if _active_ground >= 6:
-		return
-	_active_ground += 1
-	var gcol: Color
-	match kind:
-		"fire":
-			gcol = Color(1.0, 0.45, 0.1, 0.5)
-		"poison":
-			gcol = Color(0.3, 0.9, 0.3, 0.42)
-		"ice":
-			gcol = Color(0.4, 0.8, 1.0, 0.45)
-		_:
-			gcol = Color(col.r, col.g, col.b, 0.45)
-
-	var decal: Sprite2D
-	if _ground_pool.size() > 0:
-		decal = _ground_pool.pop_back()
-		decal.visible = true
-	else:
-		decal = Sprite2D.new()
-		decal.texture = FX_FLARE_TEX
-		decal.material = _additive_material
-	if decal.get_parent() == null:
-		add_child(decal)
-	decal.global_position = pos
-	decal.modulate = Color(gcol.r, gcol.g, gcol.b, 0.0)
-	decal.scale = Vector2.ONE * (radius / 96.0)
-	decal.rotation = randf_range(0.0, TAU)
-	decal.z_index = -20 # 地面层：相对弹道层压到最底
-
-	var tw = create_tween().bind_node(decal)
-	tw.set_parallel(true)
-	tw.tween_property(decal, "modulate:a", gcol.a, 0.25)
-	tw.tween_property(decal, "rotation", decal.rotation + randf_range(0.4, 1.2), dur)
-	tw.chain().tween_property(decal, "modulate:a", 0.0, 0.5)
-	tw.chain().tween_callback(func():
-		if is_instance_valid(decal):
-			decal.visible = false
-			_ground_pool.append(decal)
-		_active_ground = max(0, _active_ground - 1))
