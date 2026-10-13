@@ -301,12 +301,15 @@ func _on_projectile_arrived(
 ## 池化：按 fx_type 取出复用对，池空则新建 (建一次终身复用)
 func _acquire_projectile(fx_type: String) -> Dictionary:
 	var arr: Array = _proj_pool.get(fx_type, [])
-	if arr.size() > 0:
+	# 自愈: 池内节点可能被外部 (场景切换清理等) 释放, 逐个校验只取活节点
+	while arr.size() > 0:
 		var e: Dictionary = arr.pop_back()
 		_proj_pool[fx_type] = arr
-		return e
+		if is_instance_valid(e["proj"]) and is_instance_valid(e["trail"]):
+			return e
+	return _build_new_projectile(fx_type)
 
-	# 首建：形态贴图与缩放配置
+func _build_new_projectile(fx_type: String) -> Dictionary:
 	var tex: Texture2D = FX_ORB_TEX
 	var base_scale := Vector2(0.30, 0.30)
 	var is_rotating := false
@@ -358,10 +361,14 @@ func _release_projectile(fx_type: String, proj: Node2D, trail: Line2D) -> void:
 	if trail and is_instance_valid(trail):
 		trail.visible = false
 		trail.clear_points()
+	if not is_instance_valid(proj):
+		return
 	var arr: Array = _proj_pool.get(fx_type, [])
 	var entry: Dictionary = proj.get_meta("pool_entry", {"proj": proj, "trail": trail})
 	entry["proj"] = proj
 	entry["trail"] = trail
+	if arr.has(entry):
+		return  # 防双入池
 	if entry.has("tween") and entry["tween"] != null and entry["tween"].is_valid():
 		entry["tween"].kill()
 	entry["tween"] = null
