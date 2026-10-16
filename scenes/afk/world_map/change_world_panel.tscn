@@ -37,27 +37,46 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = ExtResource("2")
 
-[node name="BtnClose" type="Button" parent="MainPanel"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(26, 26)
+[node name="TitleLabel" type="Label" parent="MainPanel"]
 layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -26.0
-offset_bottom = 26.0
-grow_horizontal = 0
-theme_override_styles/normal = ExtResource("3")
-text = "X"
+offset_left = 14.0
+offset_top = 6.0
+offset_right = 240.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.9, 0.85, 0.7, 1)
+theme_override_font_sizes/font_size = 13
+text = "🗺️ 选择前往的战役大幕 (Act)"
+vertical_alignment = 1
 
 [node name="HBox" type="HBoxContainer" parent="MainPanel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 6.0
+offset_top = 34.0
+offset_right = -6.0
+offset_bottom = -6.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 4
+
+[node name="BtnClose" type="Button" parent="MainPanel"]
+unique_name_in_owner = true
+z_index = 10
+custom_minimum_size = Vector2(26, 26)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -32.0
+offset_top = 4.0
+offset_right = -6.0
+offset_bottom = 30.0
+grow_horizontal = 0
+theme_override_styles/normal = ExtResource("3")
+theme_override_font_sizes/font_size = 12
+text = "✕"
 
 [node name="Sidebar" type="Panel" parent="MainPanel/HBox"]
 custom_minimum_size = Vector2(110, 0)

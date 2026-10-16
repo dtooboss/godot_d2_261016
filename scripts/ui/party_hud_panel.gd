@@ -62,11 +62,28 @@ const BUFF_ICON_MAP: Dictionary = {
 	"shiver_armor": "res://assets/skills/sor/14_shiver_armor.png",
 	"chilling_armor": "res://assets/skills/sor/24_chilling_armor.png",
 	"energy_shield": "res://assets/skills/sor/22_energy_shield.png",
+	"thunder_storm": "res://assets/skills/sor/21_thunder_storm.png",
+	"battle_cry": "res://assets/skills/bar/20_battle_cry.png",
+	"war_cry": "res://assets/skills/bar/28_war_cry.png",
+	"burst_of_speed": "res://assets/skills/asn/07_quickness.png",
 	"bone_armor": "res://assets/skills/nec/02_bone_armor.png",
 	"cyclone_armor": "res://assets/skills/dru/04_cyclone_armor.png",
 	"quickness": "res://assets/skills/asn/07_quickness.png",
 	"fade": "res://assets/skills/asn/16_fade.png",
 	"venom": "res://assets/skills/asn/27_venom.png",
+	"wearwolf": "res://assets/skills/dru/10_werewolf.png",
+	"werewolf": "res://assets/skills/dru/10_werewolf.png",
+	"wearbear": "res://assets/skills/dru/12_werebear.png",
+	"werebear": "res://assets/skills/dru/12_werebear.png",
+	"oak_sage": "res://assets/skills/dru/21_oak_sage.png",
+	"heart_of_wolverine": "res://assets/skills/dru/24_heart_of_wolverine.png",
+	"spirit_of_barbs": "res://assets/skills/dru/27_spirit_of_barbs.png",
+	"cycle_of_life": "res://assets/skills/dru/23_carrion_vine.png",
+	"carrion_vine": "res://assets/skills/dru/23_carrion_vine.png",
+	"vines": "res://assets/skills/dru/26_solar_creeper.png",
+	"solar_creeper": "res://assets/skills/dru/26_solar_creeper.png",
+	"plague_poppy": "res://assets/skills/dru/20_poison_creeper.png",
+	"poison_creeper": "res://assets/skills/dru/20_poison_creeper.png",
 }
 
 ## 光环/增益中文名与效果描述
@@ -96,16 +113,30 @@ const BUFF_INFO_MAP: Dictionary = {
 	"bc": {"name": "战斗指挥", "desc": "全技能等级 +1"},
 	"battle_command": {"name": "战斗指挥", "desc": "全技能等级 +1"},
 	"shout": {"name": "大叫", "desc": "全队防御力大幅提升"},
+	"battle_cry": {"name": "战斗怒吼", "desc": "恐吓周围敌怪，削弱其防御力与物理伤害"},
+	"war_cry": {"name": "战争践踏", "desc": "震慑周围敌怪造成伤害并眩晕"},
 	"enchant": {"name": "强化", "desc": "附加高额火焰伤害与攻击命中率"},
 	"frozen_armor": {"name": "冰封甲", "desc": "提升自身防御力，近战攻击者将被冻结"},
 	"shiver_armor": {"name": "碎冰甲", "desc": "提升自身防御力，反弹冰冷伤害与减速"},
 	"chilling_armor": {"name": "寒冰甲", "desc": "大幅提升自身防御力，反弹远程飞弹"},
 	"energy_shield": {"name": "能量护盾", "desc": "以法力值吸收承受的伤害"},
+	"thunder_storm": {"name": "雷暴术", "desc": "召唤致命雷云风暴，周期性以九天神雷轰击周围敌怪"},
 	"bone_armor": {"name": "白骨装甲", "desc": "召唤白骨环绕周身吸收物理伤害"},
 	"cyclone_armor": {"name": "飓风装甲", "desc": "召唤狂风吸收火冰电元素伤害"},
 	"quickness": {"name": "速度爆发", "desc": "大幅提升攻击速度与移动速度"},
+	"burst_of_speed": {"name": "速度爆发", "desc": "大幅提升攻击速度与移动速度"},
 	"fade": {"name": "能量消解", "desc": "大幅提升全元素抗性与物理抗性"},
 	"venom": {"name": "毒牙", "desc": "为武器涂抹剧毒附加毒素伤害"},
+	"wearwolf": {"name": "狼人变化", "desc": "变身为狂暴狼人，大幅提升生命、命中、攻速与偷血，拥有15%物理减伤"},
+	"werewolf": {"name": "狼人变化", "desc": "变身为狂暴狼人，大幅提升生命、命中、攻速与偷血，拥有15%物理减伤"},
+	"wearbear": {"name": "熊人变化", "desc": "变身为铁甲巨熊，巨幅提升生命、防御与伤害，拥有25%物理硬抗减伤"},
+	"werebear": {"name": "熊人变化", "desc": "变身为铁甲巨熊，巨幅提升生命、防御与伤害，拥有25%物理硬抗减伤"},
+	"oak_sage": {"name": "橡木智者", "desc": "召唤自然灵体，大幅提升全队最大生命值"},
+	"heart_of_wolverine": {"name": "狼獾之心", "desc": "召唤战斗灵体，巨幅提升全队物理伤害与命中率"},
+	"spirit_of_barbs": {"name": "棘灵", "desc": "召唤荆棘灵体，全队反弹敌人近战伤害"},
+	"cycle_of_life": {"name": "食尸藤", "desc": "召唤食尸藤吞噬尸骸，持续恢复生命值"},
+	"vines": {"name": "太阳藤", "desc": "召唤太阳藤吞噬尸骸，持续恢复法力值"},
+	"plague_poppy": {"name": "剧毒藤", "desc": "召唤剧毒藤蔓，提升全队毒素抗性"},
 }
 
 ## 统一战力字符串格式化接口 (支持 1000->1k, 1100->1.1k, 兼容整型或已有字符串)
@@ -578,6 +609,7 @@ func _update_card_data(card_node: Control, data: Dictionary) -> void:
 ## 单个 Buff/光环微型勋章节点 (支持永久光环金边展示与战吼倒计时/呼吸频闪)
 class BuffBadgeNode extends PanelContainer:
 	var buff_id: String = ""
+	var buff_name: String = ""
 	var buff_level: int = 0
 	var remain_time: float = -1.0 # -1.0 为常驻光环
 	var total_duration: float = -1.0
@@ -592,6 +624,7 @@ class BuffBadgeNode extends PanelContainer:
 		
 		if data is Dictionary:
 			buff_id = str(data.get("id", data.get("name", ""))).to_lower().strip_edges()
+			buff_name = str(data.get("name", ""))
 			buff_level = int(data.get("level", 0))
 			if data.has("remain"):
 				remain_time = float(data.get("remain"))
@@ -632,12 +665,19 @@ class BuffBadgeNode extends PanelContainer:
 		if PartyHudPanel.BUFF_ICON_MAP.has(buff_id):
 			p = PartyHudPanel.BUFF_ICON_MAP[buff_id]
 		
-		# 动态目录匹配兜底 (杜绝任何漏写导致的贴图丢失)
+		# 动态目录匹配兜底 (杜绝任何漏写导致的贴图丢失，支持带编号前缀的贴图如 21_thunder_storm.png)
 		if p.is_empty() or not ResourceLoader.exists(p):
 			for c_dir in ["bar", "sor", "pal", "nec", "dru", "asn", "ama"]:
 				var candidate = "res://assets/skills/%s/%s.png" % [c_dir, buff_id]
 				if ResourceLoader.exists(candidate):
 					p = candidate
+					break
+				for num in range(30):
+					var c_num = "res://assets/skills/%s/%02d_%s.png" % [c_dir, num, buff_id]
+					if ResourceLoader.exists(c_num):
+						p = c_num
+						break
+				if not p.is_empty():
 					break
 		
 		if not p.is_empty() and ResourceLoader.exists(p):
@@ -687,7 +727,12 @@ class BuffBadgeNode extends PanelContainer:
 			lbl_timer.text = ""
 			
 		var info = PartyHudPanel.BUFF_INFO_MAP.get(buff_id, {})
-		var cname = info.get("name", buff_id)
+		var cname = info.get("name", "")
+		if cname.is_empty():
+			cname = buff_name
+		if cname.is_empty() or cname == buff_id:
+			cname = buff_id.replace("_", " ").capitalize()
+			
 		var cdesc = info.get("desc", "")
 		var tip = "【%s】" % cname
 		if buff_level > 0:

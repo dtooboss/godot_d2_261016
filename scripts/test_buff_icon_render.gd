@@ -17,6 +17,7 @@ func _run_tests() -> void:
 		{"id": "shiver_armor", "remain": 110, "level": 3},
 		{"id": "chilling_armor", "remain": 100, "level": 1},
 		{"id": "energy_shield", "remain": 90, "level": 4},
+		{"id": "thunder_storm", "remain": 89, "level": 10},
 		{"id": "enchant", "remain": 180, "level": 20}
 	]
 	
@@ -75,6 +76,9 @@ func _run_tests() -> void:
 			assert(badge.icon_rect != null, "勋章必须包含 icon_rect")
 			assert(badge.icon_rect.texture != null, "Buff [%s] 必须成功加载到真实 Texture 贴图，绝不能为 null！" % b_id)
 			print("✔ 角色 [%s] 的 Buff [%s] 贴图校验通过: %s" % [mid, b_id, badge.icon_rect.texture.resource_path])
+			if b_id == "thunder_storm":
+				assert("雷暴术" in badge.tooltip_text, "雷暴术 tooltip 必须包含中文名称【雷暴术】")
+				print("✔ 雷暴术 tooltip 校验通过: %s" % badge.tooltip_text.split("\n")[0])
 		
 	print("\n🎉🎉🎉 客户端所有时效 Buff 与光环贴图全部 100% 成功加载渲染！🎉🎉🎉")
 	get_tree().quit(0)

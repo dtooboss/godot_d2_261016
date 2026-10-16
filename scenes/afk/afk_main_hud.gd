@@ -73,23 +73,23 @@ func _update_player_hp(cur: int, maximum: int) -> void:
 	if party_hud_panel and is_instance_valid(party_hud_panel) and party_hud_panel.is_inside_tree() and party_hud_panel.has_method("update_self_hp"):
 		party_hud_panel.update_self_hp(cur, maximum)
 
-## 规范化关卡与房间名：剔除冗余的后缀 ((挂机副本)/(挂机点))，但保留或明确展示难度前缀
+## 规范化关卡与房间名：剔除冗余的难度前缀 (【普通】/【噩梦】/【地狱】/[普通]等) 及后缀 ((挂机副本)/(挂机点))，纯净展示地名
 func _clean_stage_name(raw_name: String) -> String:
 	var s = AnsiHelper.to_plain_text(raw_name).strip_edges()
+	s = s.replace("【普通】", "").replace("【噩梦】", "").replace("【地狱】", "")
+	s = s.replace("[普通]", "").replace("[噩梦]", "").replace("[地狱]", "")
 	s = s.replace("(挂机副本)", "").replace("（挂机副本）", "")
 	s = s.replace("(挂机点)", "").replace("（挂机点）", "")
 	s = s.replace("(副本)", "").replace("（副本）", "")
-	# 若自身包含明确难度前缀则直接保留
-	if "【噩梦】" in s or "【地狱】" in s or "【普通】" in s:
-		return s.strip_edges()
-	# 若无难度前缀且不是安全城镇，根据当前世界难度适度附加醒目前缀
-	var diff = GameState.selected_difficulty
-	if not ("营地" in s or "鲁高因" in s or "海港" in s or "堡垒" in s or "哈洛加斯" in s or "安全区" in s):
-		if diff == "nm" or diff == "nightmare":
-			s = "【噩梦】" + s
-		elif diff == "hell":
-			s = "【地狱】" + s
 	return s.strip_edges()
+
+## 统一安全更新当前地图标签（去重与防抖，仅在发生真实变化时更新）
+func _set_current_map_label(raw_name: String) -> void:
+	if not current_map_label:
+		return
+	var clean = _clean_stage_name(raw_name)
+	if not clean.is_empty() and current_map_label.text != clean:
+		current_map_label.text = clean
 
 var _my_player_name: String = ""
 var _is_returning_to_town: bool = false
@@ -97,6 +97,10 @@ var _is_returning_to_town: bool = false
 func _ready() -> void:
 	if monster_display:
 		monster_display.visible = false
+	if current_map_label and GameState.current_stage_info is Dictionary and not GameState.current_stage_info.is_empty():
+		var init_name = str(GameState.current_stage_info.get("name", ""))
+		if not init_name.is_empty():
+			_set_current_map_label(init_name)
 	# 初始化战斗特效层并挂载至战斗左视口
 	fx_manager = CombatFXManagerScene.new()
 	var left_vp = get_node_or_null("MainHBox/LeftViewport")
@@ -178,7 +182,6 @@ func _ready() -> void:
 		control_matrix.btn_shop_clicked.connect(toggle_gshop_panel)
 		control_matrix.btn_skills_clicked.connect(toggle_skill_panel)
 		control_matrix.btn_craft_clicked.connect(toggle_cube_panel)
-		control_matrix.btn_reset_points_clicked.connect(func(): NetworkClient.send_raw("reset"))
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_title)
 
 	if hook_setting_panel:
@@ -201,6 +204,10 @@ func _ready() -> void:
 		skill_panel.skill_reset_requested.connect(func():
 			if NetworkClient.is_connected:
 				NetworkClient.send_raw("gresetskill")
+		)
+		skill_panel.skill_buy_respec_requested.connect(func():
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("gbuyrespec skill")
 		)
 		skill_panel.skill_set_binding_requested.connect(func(code: String, slot: String):
 			if NetworkClient.is_connected:
@@ -241,9 +248,18 @@ func _ready() -> void:
 				item_tooltip.hide_tooltip()
 		)
 
-	# 挂机战斗专属可回缩传音视窗联动
+	# 挂机战斗专属可回缩传音视窗联动 (点击与悬浮查看装备属性)
 	if collapsible_chat:
 		collapsible_chat.item_inspected.connect(_on_chat_item_inspected)
+		collapsible_chat.item_hovered.connect(func(file_id: String):
+			if item_tooltip:
+				var mouse_pos = get_viewport().get_mouse_position()
+				item_tooltip.show_item({ "file_id": file_id, "cmd": "glookitem " + file_id }, mouse_pos)
+		)
+		collapsible_chat.item_unhovered.connect(func():
+			if item_tooltip:
+				item_tooltip.hide_tooltip()
+		)
 		
 	_update_boss_ui()
 	_hook_network_client()
@@ -490,11 +506,30 @@ func _on_return_map_pressed() -> void:
 		world_map.show()
 
 func _on_spot_selected(spot_data: Dictionary) -> void:
+	var is_town = spot_data.get("is_town", false)
 	var s_name = str(spot_data.get("name", "鲜血荒地"))
-	var stage_id = _safe_int(spot_data.get("stage_id"), 1)
+	var stage_id = _safe_int(spot_data.get("stage_id"), 0 if is_town else 1)
 	var bg = str(spot_data.get("bg", ""))
-	if current_map_label:
-		current_map_label.text = _clean_stage_name(s_name)
+
+	if is_town:
+		var act_id = str(spot_data.get("act_id", ""))
+		if act_id.is_empty():
+			var r_path = str(spot_data.get("room_path", ""))
+			if "/d/act5/" in r_path: act_id = "act5"
+			elif "/d/act4/" in r_path: act_id = "act4"
+			elif "/d/act3/" in r_path: act_id = "act3"
+			elif "/d/act2/" in r_path: act_id = "act2"
+			elif "/d/act1/" in r_path: act_id = "act1"
+			else: act_id = "act1"
+		print("[AFK_MainHUD] 大地图点选安全区小站: %s (%s)，请求安全脱战前往大本营..." % [s_name, act_id])
+		if world_map:
+			world_map.hide()
+		show_toast("正在通过传送小站前往【%s】..." % s_name)
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("stage town %s" % act_id)
+		return
+
+	_set_current_map_label(s_name)
 	_update_battlefield_background(bg, stage_id)
 	print("[AFK_MainHUD] 大地图选点切关: Stage %d【%s】" % [stage_id, s_name])
 	if world_map:
@@ -529,7 +564,7 @@ func _update_battlefield_background(bg_path: String, stage_id: int = 0) -> void:
 		else:
 			act = 1
 			sub_idx = stage_id
-		target_res = "res://mods/vanilla/assets/worlds/%d/%d.png" % [act, sub_idx]
+		target_res = "res://mods/vanilla/assets/worlds/%d/%d.webp" % [act, sub_idx]
 	
 	if not target_res.is_empty() and ResourceLoader.exists(target_res):
 		background_rect.texture = load(target_res)
@@ -545,13 +580,7 @@ func _update_boss_ui() -> void:
 		boss_progress_bar.value = pct
 
 func _on_exit_to_title() -> void:
-	if NetworkClient.is_connected:
-		NetworkClient.send_raw("quit")
-		var tree = get_tree()
-		if tree and is_inside_tree():
-			await tree.create_timer(0.15).timeout
-		NetworkClient.disconnect_server(true)
-	GameState.reset_on_logout()
+	await NetworkClient.safe_quit_and_disconnect()
 	var tree = get_tree()
 	if tree and is_inside_tree():
 		tree.change_scene_to_file("res://scenes/login/login_screen.tscn")
@@ -596,7 +625,7 @@ func _exit_tree() -> void:
 
 func _on_reconnected_to_server() -> void:
 	print("[AFK_MainHUD] ★★★ 断线重连成功，正在向 LPC 请求最新战场状态同步 ★★★")
-	show_toast("已重新连接战网！正在同步战场状态...")
+	show_toast("已重新连接服务器！正在同步战场状态...")
 	_request_lpc_sync()
 
 static func _safe_int(val: Variant, default_val: int = 0) -> int:
@@ -743,8 +772,9 @@ func _on_network_json(type: String, data: Variant) -> void:
 			var g_pct = float(data.get("exp_pct", -1.0))
 			if g_cur >= 0 and g_max >= 0:
 				player_bottom_bar.update_exp(g_cur, g_max, g_pct)
-		if not zone.is_empty() and current_map_label:
-			current_map_label.text = _clean_stage_name(zone)
+		# gscore 专注角色属性同步；仅在地图标签未初始化时进行保底赋值，打怪过程中绝不重复改写
+		if not zone.is_empty() and current_map_label and (current_map_label.text.is_empty() or current_map_label.text == "烈风平原"):
+			_set_current_map_label(zone)
 		if char_info_panel and char_info_panel.has_method("render_gscore_data"):
 			char_info_panel.render_gscore_data(data)
 
@@ -843,8 +873,9 @@ func _on_network_json(type: String, data: Variant) -> void:
 	# 4. 场景标题 (title / room)
 	elif (type == "title" or type == "room") and data is Dictionary:
 		var rname = str(data.get("name", ""))
-		if not rname.is_empty() and current_map_label:
-			current_map_label.text = _clean_stage_name(rname)
+		# 仅在首次进入房间或地图标签为空时兜底设置，避免与 stage_enter 冲突
+		if not rname.is_empty() and current_map_label and (current_map_label.text.is_empty() or current_map_label.text == "烈风平原"):
+			_set_current_map_label(rname)
 			
 	# 5. LPC 专属凹槽工坊帧 (gsocket)
 	elif type == "gsocket" and data is Dictionary:
@@ -968,8 +999,7 @@ func _on_network_json(type: String, data: Variant) -> void:
 		var act_num = _safe_int(data.get("act"), 1)
 		GameState.selected_act = "act%d" % act_num
 		GameState.current_location_act = "act%d" % act_num
-		if current_map_label:
-			current_map_label.text = _clean_stage_name(s_name)
+		_set_current_map_label(s_name)
 		_update_battlefield_background(bg, s_id)
 
 		# 切图平滑清场：销毁旧场景残留怪节点、清空槽位与残余特效
@@ -1192,8 +1222,13 @@ func _handle_gstatus_data(data: Dictionary) -> void:
 	var st = data.get("stage", {})
 	if st is Dictionary and not st.is_empty():
 		var s_name = str(st.get("stage_name", ""))
+		var s_id = _safe_int(st.get("stage_id"), -1)
+		# 仅在关卡 ID 发生实际变更，或当前地图标签未初始化时才更新，避免高频战斗快照反复重绘
 		if not s_name.is_empty() and current_map_label:
-			current_map_label.text = _clean_stage_name(s_name)
+			if GameState.selected_stage_id != s_id or current_map_label.text.is_empty() or current_map_label.text == "烈风平原":
+				_set_current_map_label(s_name)
+				if s_id > 0:
+					GameState.selected_stage_id = s_id
 
 		var is_town = _safe_int(st.get("is_town"), 0) == 1 or s_name == "城镇安全区" or (_safe_int(st.get("stage_id"), -1) == 0)
 		var threshold_val = _safe_int(st.get("threshold"), 0)
@@ -1428,6 +1463,7 @@ func _handle_combat_data(data: Dictionary) -> void:
 
 	var is_attacker_me = _is_me(atk_id, atk_name)
 	var is_victim_me = _is_me(vic_id, vic_name)
+	var is_proc = bool(data.get("is_proc", false)) or (_safe_int(data.get("is_proc"), 0) == 1) or (skill_code == "thunder_storm")
 
 	if is_attacker_me:
 		# 玩家主动出手攻击：记录输出伤害，攻速条真实归零推进与周期同步
@@ -1437,7 +1473,7 @@ func _handle_combat_data(data: Dictionary) -> void:
 		p_max_hp = _safe_int(data.get("me_max_hp"), -1)
 		p_mp = _safe_int(data.get("me_mp"), -1)
 		p_max_mp = _safe_int(data.get("me_max_mp"), -1)
-		if player_bottom_bar:
+		if player_bottom_bar and not is_proc:
 			player_bottom_bar.trigger_attack(interval)
 			if not skill_name.is_empty():
 				player_bottom_bar.set_main_skill(skill_name, skill_code)
@@ -1459,12 +1495,12 @@ func _handle_combat_data(data: Dictionary) -> void:
 	if player_bottom_bar and p_mp >= 0 and p_max_mp > 0:
 		player_bottom_bar.update_mp(p_mp, p_max_mp)
 
-	# 0.5 怪物主动出手攻击：触发攻击者怪物技能黄条真实归零推进与技能名显示
+	# 0.5 怪物主动出手攻击：触发攻击者怪物技能条真实归零推进与技能名/元素显示
 	var atk_node = null
 	if not is_attacker_me:
 		atk_node = _find_monster_node(atk_id, str(data.get("attacker_uuid", "")))
 		if atk_node and is_instance_valid(atk_node):
-			atk_node.trigger_attack(interval, skill_name)
+			atk_node.trigger_attack(interval, skill_name, elem)
 
 	# 1. 连击弹道错峰 + 连锁蔓延起点解析 (接收时刻快照，错峰延迟后坐标仍准)
 	#    服务端 effect/seq/from 字段优先: combo=seq×110ms 连珠串, chain=seq×80ms 逐段从上一跳蔓延;
@@ -1645,9 +1681,11 @@ func _apply_combat_hit(
 			hit_node.spawn_damage(-1, elem, false, false, is_attacker_me)
 		elif result == "block":
 			hit_node.spawn_damage(-2, elem, false, false, is_attacker_me)
+			if fx_manager and is_instance_valid(fx_manager):
+				fx_manager.play_shield_block(hit_node.global_position)
 		else:
 			hit_node.spawn_damage(dmg, elem, is_crit, false, is_attacker_me)
-			hit_node.play_hit_reaction(is_crit)
+			hit_node.play_hit_reaction(is_crit, elem)
 			
 		# 服务端权威生命值对齐 (Authoritative Server First):
 		# 1. 服务端下发了权威受击者生命快照 you_hp (vic_hp):
@@ -1705,12 +1743,6 @@ func _apply_combat_hit(
 				
 			if NetworkClient.is_connected:
 				NetworkClient.send_raw("ghp1")
-				
-		# 状态机变色 (DoT)
-		if "毒" in elem:
-			hit_node.set_dot_state(true, false)
-		elif "冰" in elem:
-			hit_node.set_dot_state(false, true)
 			
 	elif not _is_user_or_team_member(vic_id) and not _monster_instances.is_empty():
 		# AoE 弧线飘字：仅在当前存活目标有效时播放

@@ -39,6 +39,16 @@ func _run_tests() -> void:
 	var lobby = lobby_scene.instantiate()
 	add_child(lobby)
 	await get_tree().process_frame
+	await get_tree().create_timer(0.2).timeout
+	var title_lbl = lobby.get_node("TopBar/Title")
+	print("  大厅标题文字: ", title_lbl.text)
+	assert(not ("战网" in title_lbl.text), "大厅标题严禁包含战网侵权字样")
+	assert(not ("庇护之地" in title_lbl.text), "大厅标题严禁包含庇护之地字样")
+	if DisplayServer.get_name() != "headless":
+		var vp = get_viewport()
+		if vp and vp.get_texture():
+			var img = vp.get_texture().get_image()
+			if img: img.save_png("user://character_select_screen.png")
 
 	assert(lobby.btn_create_char != null, "+ 创建新英雄 按钮必须存在")
 	assert(lobby.create_char_modal != null, "创建角色模态弹窗必须存在")
@@ -138,6 +148,53 @@ func _run_tests() -> void:
 	NetworkClient.raw_sent.disconnect(on_sent)
 	NetworkClient.is_connected = false
 	lobby.queue_free()
+	await get_tree().process_frame
+
+	# ----------------------------------------------------
+	# Test 4: 验证登录界面绿色版本号 V0.1 动态渲染
+	# ----------------------------------------------------
+	print("\n[Test 4] 验证 LoginScreen 版本号与绿色富文本...")
+	var login_scene = load("res://scenes/login/login_screen.tscn")
+	var login_instance = login_scene.instantiate()
+	add_child(login_instance)
+	await get_tree().process_frame
+
+	var footer = login_instance.get_node_or_null("FooterInfo")
+	assert(footer != null, "FooterInfo 节点必须存在")
+	assert(footer is RichTextLabel, "FooterInfo 必须是 RichTextLabel")
+	print("  FooterInfo 文本内容: ", footer.text)
+	assert("V0.1" in footer.text, "版本号必须显示 V0.1")
+	assert("[color=#44ff44]V0.1[/color]" in footer.text, "版本号 V0.1 必须使用绿色 #44ff44 高亮渲染")
+	print("✔ Test 4 通过: 登录界面版本号 V0.1 绿色高亮渲染验证无误！")
+
+	# ----------------------------------------------------
+	# Test 5: 验证同名注册报错防重连死循环与文案防覆盖保护
+	# ----------------------------------------------------
+	print("\n[Test 5] 验证同名通行证注册报错与断连防冲刷保护...")
+	# 模拟发起注册请求
+	NetworkClient.is_reconnecting = false
+	NetworkClient.manual_disconnect = false
+	login_instance._last_error_time = 0.0
+
+	# 模拟收到同名注册失败的错误协议帧
+	var mock_reg_conflict = "J_{\"type\":\"error\",\"msg\":\"该通行证账号已被注册，请直接登录或更换账号名称！\"}\n"
+	NetworkClient._handle_incoming_line(mock_reg_conflict.strip_edges())
+
+	# 断言 1: NetworkClient 收到 error 帧后必须设置 manual_disconnect = true，阻断自动重连
+	assert(NetworkClient.manual_disconnect == true, "业务错误必须触发 manual_disconnect = true 阻断自动重连死循环")
+	assert(NetworkClient.is_reconnecting == false, "不能处于正在重连状态")
+
+	# 断言 2: LoginController 状态栏必须显示具体的错误提示
+	var status_lbl = login_instance.get_node_or_null("Panel/VBox/StatusLabel")
+	assert(status_lbl != null, "StatusLabel 必须存在")
+	assert("该通行证账号已被注册" in status_lbl.text, "状态栏必须显示通行证已被注册提示，实际为: " + status_lbl.text)
+
+	# 断言 3: 模拟紧随其后的断开连接信号 _on_disconnected()，验证文案不被冲刷
+	login_instance._on_disconnected()
+	assert("该通行证账号已被注册" in status_lbl.text, "断开连接事件不得覆盖具体业务报错提示，实际为: " + status_lbl.text)
+	print("✔ Test 5 通过: 同名注册错误提示常驻且彻底阻断死循环自动重连！")
+
+	login_instance.queue_free()
 	await get_tree().process_frame
 
 	print("\n==================================================")

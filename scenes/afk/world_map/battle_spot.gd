@@ -17,19 +17,36 @@ func setup(spot_data: Dictionary) -> void:
 	var is_cleared = spot_data.get("cleared", false)
 	var is_current = spot_data.get("is_current", false)
 	var is_unlocked = spot_data.get("unlocked", true)
-	var is_boss_level = (s_id == 13)
+	var is_town = spot_data.get("is_town", false)
+	var is_boss_level = (s_id == 13 or s_id == 14)
 
 	if name_label:
-		name_label.text = "Lv.%d %s" % [s_lvl, s_name]
+		if is_town:
+			name_label.text = "🌟 %s (小站)" % s_name
+		else:
+			name_label.text = "Lv.%d %s" % [s_lvl, s_name]
 	
-	# 设置据点标签样式 (Boss关红边、已通关翠绿、当前挑战关高亮绿底金框、未解锁暗灰)
+	# 设置据点标签样式 (小站奥术幽蓝、Boss关红边、已通关翠绿、当前挑战关高亮绿底金框、未解锁暗灰)
 	var style = StyleBoxFlat.new()
 	style.corner_radius_top_left = 4
 	style.corner_radius_top_right = 4
 	style.corner_radius_bottom_right = 4
 	style.corner_radius_bottom_left = 4
 	
-	if not is_unlocked:
+	if is_town:
+		# 安全区小站：明亮奥术蔚蓝神圣底色 + 符文金光边框，100%满亮度图标，极度醒目
+		style.bg_color = Color(0.12, 0.40, 0.82, 0.96)
+		style.border_width_left = 2
+		style.border_width_top = 2
+		style.border_width_right = 2
+		style.border_width_bottom = 2
+		style.border_color = Color(1.0, 0.88, 0.35, 1.0)
+		if name_label:
+			name_label.add_theme_color_override("font_color", Color(1.0, 1.0, 0.85, 1.0))
+		if icon_btn:
+			icon_btn.modulate = Color(1.0, 1.0, 1.0, 1.0)
+			icon_btn.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	elif not is_unlocked:
 		# 未解锁：暗灰沉寂，半透明置灰，光标禁用
 		style.bg_color = Color(0.18, 0.20, 0.22, 0.85)
 		style.border_width_left = 1

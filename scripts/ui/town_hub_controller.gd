@@ -57,6 +57,7 @@ var is_sidebar_expanded: bool = true
 @onready var leaderboard_modal: Control = $LeaderboardModal
 @onready var btn_close_rank: Button = $LeaderboardModal/CenterContainer/Panel/VBox/BtnCloseRank
 @onready var rank_list_vbox: VBoxContainer = $LeaderboardModal/CenterContainer/Panel/VBox/Scroll/RankListVBox
+var selected_ladder_hero: Dictionary = {}
 @onready var item_tooltip: AFK_ItemTooltip = $ItemTooltip
 @onready var team_invite_dialog: Control = get_node_or_null("TeamInviteDialog")
 @onready var world_map: AFK_WorldMap = get_node_or_null("WorldMap")
@@ -197,10 +198,12 @@ func _connect_signals() -> void:
 	btn_waypoint.pressed.connect(_toggle_world_map)
 	btn_cube.pressed.connect(_toggle_cube_panel)
 	
-	# 聊天输入与超链接点击
+	# 聊天输入与超链接点击/悬停展示 Tooltip
 	chat_input.text_submitted.connect(_on_chat_submitted)
 	btn_chat_send.pressed.connect(func(): _on_chat_submitted(chat_input.text))
 	chat_log.meta_clicked.connect(_on_chat_meta_clicked)
+	chat_log.meta_hover_started.connect(_on_chat_meta_hover_started)
+	chat_log.meta_hover_ended.connect(_on_chat_meta_hover_ended)
 	if chat_input.has_signal("item_dropped"):
 		chat_input.item_dropped.connect(_insert_item_to_chat)
 	
@@ -251,7 +254,6 @@ func _connect_signals() -> void:
 		control_matrix.btn_pickup_clicked.connect(_toggle_pickup_setting)
 		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
 		control_matrix.btn_shop_clicked.connect(_toggle_gshop_panel)
-		control_matrix.btn_reset_points_clicked.connect(func(): NetworkClient.send_raw("reset"))
 		control_matrix.btn_hook_clicked.connect(_toggle_hook_setting)
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_login)
 	
@@ -284,6 +286,10 @@ func _connect_signals() -> void:
 		skill_panel.skill_reset_requested.connect(func():
 			if NetworkClient.is_connected:
 				NetworkClient.send_raw("gresetskill")
+		)
+		skill_panel.skill_buy_respec_requested.connect(func():
+			if NetworkClient.is_connected:
+				NetworkClient.send_raw("gbuyrespec skill")
 		)
 		skill_panel.skill_set_binding_requested.connect(func(code: String, slot: String):
 			if NetworkClient.is_connected:
@@ -522,8 +528,32 @@ func _toggle_world_map() -> void:
 		world_map.update_progress(GameState.player_max_stage)
 		world_map.show()
 
-## 大地图选点切关并出征进入野外战斗
+## 大地图选点切关并出征进入野外战斗 / 传送安全区小站
 func _on_map_spot_selected(arg1: Variant, arg2: Variant = null) -> void:
+	if arg1 is Dictionary and arg1.get("is_town", false):
+		var target_act = str(arg1.get("act_id", ""))
+		if target_act.is_empty():
+			var r_path = str(arg1.get("room_path", ""))
+			if "/d/act5/" in r_path: target_act = "act5"
+			elif "/d/act4/" in r_path: target_act = "act4"
+			elif "/d/act3/" in r_path: target_act = "act3"
+			elif "/d/act2/" in r_path: target_act = "act2"
+			elif "/d/act1/" in r_path: target_act = "act1"
+			else: target_act = "act1"
+		var t_name = str(arg1.get("name", "罗格营地"))
+		if world_map:
+			world_map.hide()
+		if current_act_key == target_act:
+			_show_toast("你当前已身处【%s】安全大本营中！" % t_name)
+			return
+		if GameState.is_in_team and not GameState.is_team_leader():
+			_show_toast("当前正处于队伍中，仅队长可带领全队传送切换大本营！")
+			return
+		_show_toast("正在通过传送小站前往【%s】..." % t_name)
+		if NetworkClient.is_connected:
+			NetworkClient.send_raw("stage town %s" % target_act)
+		return
+
 	var stage_id: int = 1
 	var s_name: String = ""
 	if arg1 is Dictionary:
@@ -683,11 +713,16 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 		print("[TownHub] 收到关卡进度更新: max_stage = %d, selected = %d (%s), worlds = %d, alvls = %d" % [max_s, GameState.selected_stage_id, GameState.selected_act, GameState.unlocked_worlds.size(), GameState.stage_alvls.size()])
 		if world_map:
 			world_map.update_progress(max_s)
+		_update_go_battle_button()
 
 	# 0.1 LPC 专属挂机与推图设置帧 (afk_settings)
 	elif type == "afk_settings" and data is Dictionary:
 		if hook_setting_panel and hook_setting_panel.has_method("_apply_settings_from_server"):
 			hook_setting_panel._apply_settings_from_server(data)
+
+	# 0.2 LPC 专属天梯榜结构化数据包 (leaderboard)
+	elif type == "leaderboard" and data is Dictionary:
+		_render_leaderboard_data(data)
 
 	# 1. 房间标题 (罗格营地 / 鲁高因 等)
 	elif type == "title":
@@ -1087,8 +1122,58 @@ func _update_town_display(plain_name: String) -> void:
 			camp_title.text = act_info.title
 			camp_desc.text = act_info.desc
 			lbl_room_title.text = "[center]【 [color=#4ade80]%s[/color] (安全区) 】[/center]" % act_info.name
-			btn_go_battle.text = "⚔️ 出征野外挂机战斗 (前往 %s)" % act_info.exit_name
+			_update_go_battle_button()
 			break
+
+## 获取当前安全区城镇出征应前往的目标关卡 ID (严格保证大幕范围合法性)
+func _get_target_battle_stage_id() -> int:
+	var st_id = 1
+	if GameState.current_stage_info is Dictionary and GameState.current_stage_info.has("stage"):
+		st_id = _safe_int(GameState.current_stage_info.get("stage"), 1)
+	elif GameState.selected_stage_id > 0:
+		st_id = GameState.selected_stage_id
+
+	# 跨大幕合法性对齐：若当前大幕与目标关卡所属范围不匹配，自动对齐到当前大幕的首关
+	if current_act_key == "act1":
+		if st_id < 1 or st_id > 14: st_id = 1
+	elif current_act_key == "act2":
+		if st_id < 15 or st_id > 34: st_id = 15
+	elif current_act_key == "act3":
+		if st_id < 35 or st_id > 56: st_id = 35
+	elif current_act_key == "act4":
+		if st_id < 57 or st_id > 64: st_id = 57
+	elif current_act_key == "act5":
+		if st_id < 65 or st_id > 85: st_id = 65
+	return st_id
+
+## 根据关卡 ID 获取关卡权威中文名称 (优先缓存，次查世界大地图全85关拓扑)
+func _get_stage_name_by_id(stage_id: int, fallback_act_key: String = "") -> String:
+	# 1. 优先查阅当前缓存的实时关卡信息
+	if GameState.current_stage_info is Dictionary and _safe_int(GameState.current_stage_info.get("stage"), 0) == stage_id:
+		var s_name = str(GameState.current_stage_info.get("name", "")).strip_edges()
+		if not s_name.is_empty():
+			return s_name
+
+	# 2. 从世界大地图全 85 关权威拓扑中按 stage_id 检索
+	for act_id in AFK_WorldMap.ACTS_CONFIG:
+		var act_data = AFK_WorldMap.ACTS_CONFIG[act_id]
+		var spots = act_data.get("spots", [])
+		for sp in spots:
+			if not sp.get("is_town", false) and _safe_int(sp.get("stage_id"), -1) == stage_id:
+				return str(sp.get("name", ""))
+
+	# 3. 兜底使用当前大幕首关名称
+	if ACT_THEMES.has(fallback_act_key):
+		return ACT_THEMES[fallback_act_key].exit_name
+	return "野外战场"
+
+## 动态刷新出征按钮文字 (与当前记忆关卡及实际发包严格匹配)
+func _update_go_battle_button() -> void:
+	if not btn_go_battle:
+		return
+	var target_st_id = _get_target_battle_stage_id()
+	var stage_name = _get_stage_name_by_id(target_st_id, current_act_key)
+	btn_go_battle.text = "⚔️ 出征野外挂机战斗 (前往 %s)" % stage_name
 
 var _last_room_refresh_time: int = 0
 func _request_refresh_room() -> void:
@@ -1404,9 +1489,10 @@ func _on_chat_submitted(text: String) -> void:
 	chat_input.text = ""
 
 func _append_chat(bbcode_text: String, clean_snippet: String = "", record_to_global: bool = true) -> void:
-	chat_log.append_text(bbcode_text + "\n")
+	var clean_bb = bbcode_text.strip_edges(false, true)
+	chat_log.append_text(clean_bb + "\n")
 	if record_to_global:
-		GameState.add_chat_message(bbcode_text, clean_snippet)
+		GameState.add_chat_message(clean_bb, clean_snippet)
 
 ## 点击公频聊天中的装备超链接
 func _on_chat_meta_clicked(meta: Variant) -> void:
@@ -1418,6 +1504,22 @@ func _on_chat_meta_clicked(meta: Variant) -> void:
 		var cmd = meta_str.substr(5)
 		if NetworkClient.is_connected:
 			NetworkClient.send_raw(cmd)
+
+## 鼠标悬停公频聊天中的装备超链接 (统一Tooltip悬停展示体验)
+func _on_chat_meta_hover_started(meta: Variant) -> void:
+	var meta_str = str(meta).strip_edges()
+	if meta_str.begins_with("item:"):
+		var file_id = meta_str.substr(5)
+		if item_tooltip:
+			var mouse_pos = get_viewport().get_mouse_position()
+			item_tooltip.show_item({ "file_id": file_id, "cmd": "glookitem " + file_id }, mouse_pos)
+
+## 鼠标移出公频聊天中的装备超链接
+func _on_chat_meta_hover_ended(meta: Variant) -> void:
+	var meta_str = str(meta).strip_edges()
+	if meta_str.begins_with("item:"):
+		if item_tooltip:
+			item_tooltip.hide_tooltip()
 
 ## 跨空间查看装备高保真暗黑2悬浮卡片
 func _inspect_chat_item(file_id: String) -> void:
@@ -1498,18 +1600,10 @@ func _on_enter_battle_pressed() -> void:
 		_show_toast("当前正处于队伍中，请等待队长带领全队统一出征！")
 		return
 		
-	_show_toast("正在带领队伍出征，前往野外专属挂机位面...")
+	var st_id = _get_target_battle_stage_id()
+	var s_name = _get_stage_name_by_id(st_id, current_act_key)
+	_show_toast("正在带领队伍出征，前往【%s】挂机位面..." % s_name)
 	if NetworkClient.is_connected:
-		var st_id = _safe_int(GameState.current_stage_info.get("stage"), 1)
-		# 若当前处于鲁高因及后续大幕，但关卡尚未跟进，自动对齐所属大幕首关
-		if current_act_key == "act2" and st_id < 15:
-			st_id = 15
-		elif current_act_key == "act3" and st_id < 35:
-			st_id = 35
-		elif current_act_key == "act4" and st_id < 57:
-			st_id = 57
-		elif current_act_key == "act5" and st_id < 65:
-			st_id = 65
 		NetworkClient.send_raw("stage %d" % st_id)
 		
 	await get_tree().create_timer(0.2).timeout
@@ -1519,12 +1613,340 @@ func _on_enter_battle_pressed() -> void:
 func _open_leaderboard() -> void:
 	if toast_label: toast_label.visible = false
 	leaderboard_modal.visible = true
+	
+	# 占位提示
+	if rank_list_vbox:
+		for c in rank_list_vbox.get_children():
+			c.queue_free()
+		var loading_lbl = Label.new()
+		loading_lbl.text = "⏳ 正在与圣域石碑同步天梯英雄排名..."
+		loading_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		loading_lbl.add_theme_color_override("font_color", Color(0.8, 0.75, 0.6))
+		rank_list_vbox.add_child(loading_lbl)
+		
 	NetworkClient.send_raw("tops lvl")
 
 func _close_leaderboard() -> void:
 	leaderboard_modal.visible = false
 
+## 接收结构化天梯榜数据并以暗黑哥特石质卡片形式渲染
+func _render_leaderboard_data(data: Dictionary) -> void:
+	if not rank_list_vbox:
+		return
+		
+	for c in rank_list_vbox.get_children():
+		c.queue_free()
+		
+	var my_rank = _safe_int(data.get("my_rank", 0), 0)
+	var is_wiz = bool(data.get("is_wiz", false))
+	var list = data.get("list", [])
+	
+	# 更新面板头部标题与自身位次
+	var season_name = str(data.get("season_name", "第一赛季 (Season 1)"))
+	var rank_title_node = leaderboard_modal.get_node_or_null("CenterContainer/Panel/VBox/RankTitle")
+	if rank_title_node:
+		var my_rank_str = "暂未上榜"
+		if is_wiz:
+			my_rank_str = "GM巫师 (不参与排名)"
+		elif my_rank > 0:
+			my_rank_str = "第 %d 名" % my_rank
+		rank_title_node.text = "🏆 圣域天梯英雄榜 (%s) · [我的排位: %s]" % [season_name, my_rank_str]
+		
+	if not (list is Array) or list.is_empty():
+		var empty_lbl = Label.new()
+		empty_lbl.text = "暂无天梯勇士数据，首通战役即刻登榜！"
+		empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		empty_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+		rank_list_vbox.add_child(empty_lbl)
+		return
+		
+	for item in list:
+		if item is Dictionary:
+			var card = _create_leaderboard_card(item)
+			rank_list_vbox.add_child(card)
+
+## 创建单个暗黑哥特石板条目卡片
+func _create_leaderboard_card(item: Dictionary) -> PanelContainer:
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(0, 56)
+	card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	
+	var rank = _safe_int(item.get("rank", 999), 999)
+	var c_name = str(item.get("name", "无名氏"))
+	var c_id = str(item.get("char_id", ""))
+	var cls = str(item.get("class", "nec")).to_lower()
+	var cls_name = str(item.get("class_name", "英雄"))
+	var lvl = _safe_int(item.get("level", 1), 1)
+	var exp_pct = str(item.get("exp_pct", "0.0"))
+	var diff = str(item.get("diff", "normal")).to_lower()
+	var diff_name = str(item.get("diff_name", "普通"))
+	var stage_id = _safe_int(item.get("stage_id", 1), 1)
+	var stage_name = str(item.get("stage_name", "鲜血荒地"))
+	var rating = _safe_int(item.get("rating", 100), 100)
+	
+	# 基础石板卡片背景样式
+	var normal_style = StyleBoxFlat.new()
+	normal_style.corner_radius_top_left = 6
+	normal_style.corner_radius_top_right = 6
+	normal_style.corner_radius_bottom_right = 6
+	normal_style.corner_radius_bottom_left = 6
+	normal_style.content_margin_left = 12
+	normal_style.content_margin_top = 8
+	normal_style.content_margin_right = 14
+	normal_style.content_margin_bottom = 8
+	
+	# 根据前三名赋予专属辉光边框
+	if rank == 1:
+		normal_style.bg_color = Color(0.14, 0.12, 0.08, 0.95)
+		normal_style.border_width_left = 2
+		normal_style.border_width_top = 1
+		normal_style.border_width_right = 1
+		normal_style.border_width_bottom = 1
+		normal_style.border_color = Color(1.0, 0.82, 0.3, 0.85)
+	elif rank == 2:
+		normal_style.bg_color = Color(0.11, 0.12, 0.14, 0.95)
+		normal_style.border_width_left = 2
+		normal_style.border_width_top = 1
+		normal_style.border_width_right = 1
+		normal_style.border_width_bottom = 1
+		normal_style.border_color = Color(0.75, 0.8, 0.88, 0.75)
+	elif rank == 3:
+		normal_style.bg_color = Color(0.13, 0.10, 0.08, 0.95)
+		normal_style.border_width_left = 2
+		normal_style.border_width_top = 1
+		normal_style.border_width_right = 1
+		normal_style.border_width_bottom = 1
+		normal_style.border_color = Color(0.85, 0.6, 0.35, 0.75)
+	else:
+		normal_style.bg_color = Color(0.08, 0.08, 0.09, 0.9)
+		normal_style.border_width_left = 1
+		normal_style.border_width_top = 1
+		normal_style.border_width_right = 1
+		normal_style.border_width_bottom = 1
+		normal_style.border_color = Color(0.24, 0.24, 0.26, 0.6)
+		
+	card.add_theme_stylebox_override("panel", normal_style)
+	
+	# Hover 高亮微交互
+	var hover_style = normal_style.duplicate() as StyleBoxFlat
+	hover_style.bg_color = Color(normal_style.bg_color.r + 0.06, normal_style.bg_color.g + 0.06, normal_style.bg_color.b + 0.06, 0.98)
+	hover_style.border_color = Color(0.95, 0.85, 0.45, 0.95)
+	
+	card.mouse_entered.connect(func():
+		card.add_theme_stylebox_override("panel", hover_style)
+	)
+	card.mouse_exited.connect(func():
+		card.add_theme_stylebox_override("panel", normal_style)
+	)
+	
+	# 点击卡片：选中角色并提示（预留 Build 弹窗详情接口）
+	card.gui_input.connect(func(event: InputEvent):
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_on_leaderboard_card_clicked(item)
+	)
+	
+	# 主水平排列
+	var hbox = HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 14)
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	card.add_child(hbox)
+	
+	# 1. 名次徽章 (RankBadge)
+	var rank_box = PanelContainer.new()
+	rank_box.custom_minimum_size = Vector2(46, 36)
+	var rank_style = StyleBoxFlat.new()
+	rank_style.corner_radius_top_left = 4
+	rank_style.corner_radius_top_right = 4
+	rank_style.corner_radius_bottom_right = 4
+	rank_style.corner_radius_bottom_left = 4
+	
+	var rank_lbl = Label.new()
+	rank_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rank_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	
+	if rank == 1:
+		rank_style.bg_color = Color(0.85, 0.65, 0.15, 0.3)
+		rank_style.border_color = Color(1.0, 0.85, 0.3, 1)
+		rank_style.border_width_left = 1; rank_style.border_width_top = 1; rank_style.border_width_right = 1; rank_style.border_width_bottom = 1
+		rank_lbl.text = "🥇 1"
+		rank_lbl.add_theme_font_size_override("font_size", 14)
+		rank_lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.45))
+	elif rank == 2:
+		rank_style.bg_color = Color(0.65, 0.7, 0.8, 0.3)
+		rank_style.border_color = Color(0.85, 0.9, 0.98, 1)
+		rank_style.border_width_left = 1; rank_style.border_width_top = 1; rank_style.border_width_right = 1; rank_style.border_width_bottom = 1
+		rank_lbl.text = "🥈 2"
+		rank_lbl.add_theme_font_size_override("font_size", 14)
+		rank_lbl.add_theme_color_override("font_color", Color(0.9, 0.95, 1.0))
+	elif rank == 3:
+		rank_style.bg_color = Color(0.7, 0.45, 0.2, 0.3)
+		rank_style.border_color = Color(0.95, 0.65, 0.35, 1)
+		rank_style.border_width_left = 1; rank_style.border_width_top = 1; rank_style.border_width_right = 1; rank_style.border_width_bottom = 1
+		rank_lbl.text = "🥉 3"
+		rank_lbl.add_theme_font_size_override("font_size", 14)
+		rank_lbl.add_theme_color_override("font_color", Color(1.0, 0.75, 0.45))
+	else:
+		rank_style.bg_color = Color(0.14, 0.14, 0.16, 0.6)
+		rank_lbl.text = "%d" % rank
+		rank_lbl.add_theme_font_size_override("font_size", 13)
+		rank_lbl.add_theme_color_override("font_color", Color(0.7, 0.72, 0.75))
+		
+	rank_box.add_theme_stylebox_override("panel", rank_style)
+	rank_box.add_child(rank_lbl)
+	hbox.add_child(rank_box)
+	
+	# 2. 职业专属图章 (ClassIcon)
+	var icon_lbl = Label.new()
+	icon_lbl.custom_minimum_size = Vector2(30, 36)
+	icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	icon_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	icon_lbl.add_theme_font_size_override("font_size", 16)
+	match cls:
+		"nec": icon_lbl.text = "💀"
+		"sor": icon_lbl.text = "⚡"
+		"pal": icon_lbl.text = "🛡️"
+		"bar": icon_lbl.text = "🪓"
+		"asn": icon_lbl.text = "🗡️"
+		"dru":
+			var d_form = str(item.get("form", "")).to_lower()
+			if d_form == "wearbear" or cls_name.find("熊") != -1:
+				icon_lbl.text = "🐻"
+			elif d_form == "wearwolf" or cls_name.find("狼") != -1:
+				icon_lbl.text = "🐺"
+			elif d_form == "summoner" or cls_name.find("召") != -1:
+				icon_lbl.text = "🦅"
+			else:
+				icon_lbl.text = "🌿"
+		"ama": icon_lbl.text = "🏹"
+		_: icon_lbl.text = "⚔️"
+	hbox.add_child(icon_lbl)
+	
+	# 3. 角色名与身份信息 (NameBox)
+	var name_box = VBoxContainer.new()
+	name_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	name_box.add_theme_constant_override("separation", 2)
+	
+	var name_lbl = Label.new()
+	name_lbl.text = c_name
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	if rank <= 3:
+		name_lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
+	else:
+		name_lbl.add_theme_color_override("font_color", Color(0.92, 0.92, 0.94))
+	name_box.add_child(name_lbl)
+	
+	var sub_lbl = Label.new()
+	sub_lbl.text = "%s · %s" % [cls_name, c_id]
+	sub_lbl.add_theme_font_size_override("font_size", 10)
+	sub_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.65))
+	name_box.add_child(sub_lbl)
+	hbox.add_child(name_box)
+	
+	# 4. 醒目推关进度彩色胶囊 (ProgressCapsule)
+	var capsule = PanelContainer.new()
+	capsule.custom_minimum_size = Vector2(190, 30)
+	var cap_style = StyleBoxFlat.new()
+	cap_style.corner_radius_top_left = 15
+	cap_style.corner_radius_top_right = 15
+	cap_style.corner_radius_bottom_right = 15
+	cap_style.corner_radius_bottom_left = 15
+	cap_style.content_margin_left = 10
+	cap_style.content_margin_right = 10
+	cap_style.border_width_left = 1; cap_style.border_width_top = 1; cap_style.border_width_right = 1; cap_style.border_width_bottom = 1
+	
+	var cap_lbl = Label.new()
+	cap_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cap_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cap_lbl.add_theme_font_size_override("font_size", 11)
+	
+	if diff == "hell":
+		# 地狱：暗红烈焰
+		cap_style.bg_color = Color(0.35, 0.08, 0.06, 0.85)
+		cap_style.border_color = Color(0.95, 0.35, 0.25, 0.9)
+		cap_lbl.text = "🔥 地狱 · %s (%d关)" % [stage_name, stage_id]
+		cap_lbl.add_theme_color_override("font_color", Color(1.0, 0.75, 0.65))
+	elif diff == "nm":
+		# 噩梦：流金炽橙
+		cap_style.bg_color = Color(0.32, 0.18, 0.05, 0.85)
+		cap_style.border_color = Color(0.95, 0.65, 0.2, 0.9)
+		cap_lbl.text = "⚡ 噩梦 · %s (%d关)" % [stage_name, stage_id]
+		cap_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.55))
+	else:
+		# 普通：深邃幽蓝
+		cap_style.bg_color = Color(0.08, 0.16, 0.28, 0.85)
+		cap_style.border_color = Color(0.3, 0.6, 0.95, 0.8)
+		cap_lbl.text = "🛡️ 普通 · %s (%d关)" % [stage_name, stage_id]
+		cap_lbl.add_theme_color_override("font_color", Color(0.75, 0.88, 1.0))
+		
+	capsule.add_theme_stylebox_override("panel", cap_style)
+	capsule.add_child(cap_lbl)
+	hbox.add_child(capsule)
+	
+	# 5. 等级与当前经验进度 (LevelBox)
+	var lvl_box = VBoxContainer.new()
+	lvl_box.custom_minimum_size = Vector2(85, 0)
+	lvl_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	lvl_box.add_theme_constant_override("separation", 2)
+	
+	var lvl_lbl = Label.new()
+	lvl_lbl.text = "Lv. %d" % lvl
+	lvl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lvl_lbl.add_theme_font_size_override("font_size", 14)
+	lvl_lbl.add_theme_color_override("font_color", Color(0.4, 0.95, 0.5))
+	lvl_box.add_child(lvl_lbl)
+	
+	var exp_lbl = Label.new()
+	exp_lbl.text = "进度 %s%%" % exp_pct
+	exp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	exp_lbl.add_theme_font_size_override("font_size", 10)
+	exp_lbl.add_theme_color_override("font_color", Color(0.7, 0.75, 0.6))
+	lvl_box.add_child(exp_lbl)
+	hbox.add_child(lvl_box)
+	
+	# 6. 综合实战战力 (RatingBox)
+	var rating_box = VBoxContainer.new()
+	rating_box.custom_minimum_size = Vector2(80, 0)
+	rating_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	rating_box.add_theme_constant_override("separation", 2)
+	
+	var rating_val = Label.new()
+	rating_val.text = "%d" % rating
+	rating_val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	rating_val.add_theme_font_size_override("font_size", 14)
+	rating_val.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
+	rating_box.add_child(rating_val)
+	
+	var rating_title = Label.new()
+	rating_title.text = "综合战力"
+	rating_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	rating_title.add_theme_font_size_override("font_size", 10)
+	rating_title.add_theme_color_override("font_color", Color(0.65, 0.6, 0.5))
+	rating_box.add_child(rating_title)
+	hbox.add_child(rating_box)
+	
+	return card
+
+## 点击天梯榜卡片事件 (预留查看 Build 详情)
+func _on_leaderboard_card_clicked(item: Dictionary) -> void:
+	selected_ladder_hero = item
+	var hero_name = str(item.get("name", "英雄"))
+	var char_id = str(item.get("char_id", ""))
+	var cls_name = str(item.get("class_name", ""))
+	var lvl = _safe_int(item.get("level", 1), 1)
+	
+	print("[TownHub] 选中天梯英雄: %s (%s), 职业: %s, 等级: Lv.%d" % [hero_name, char_id, cls_name, lvl])
+	
+	# 发出请求查询目标玩家数据 (向后端查询，预留通信)
+	if NetworkClient.is_connected and char_id != "":
+		NetworkClient.send_raw("look " + char_id)
+		
+	# 界面友好 Toast 反馈
+	_show_toast("✦ 已选定【%s · %s】的天梯档案\n(流派配装与技能加点纸娃娃筹备中)" % [cls_name, hero_name])
+
+## 兼容渲染纯文本格式的旧版/兜底榜单
 func _render_leaderboard_text(raw_text: String) -> void:
+	if not rank_list_vbox: return
 	for c in rank_list_vbox.get_children():
 		c.queue_free()
 		
@@ -1541,14 +1963,11 @@ func _render_leaderboard_text(raw_text: String) -> void:
 			lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.35))
 		else:
 			lbl.add_theme_font_size_override("font_size", 13)
-			if clean.begins_with("1 ") or clean.begins_with("1\t"):
-				lbl.text = "🥇 " + clean
+			if clean.begins_with("1 ") or clean.begins_with("1\t") or "🥇" in clean:
 				lbl.add_theme_color_override("font_color", Color(1.0, 0.9, 0.4))
-			elif clean.begins_with("2 ") or clean.begins_with("2\t"):
-				lbl.text = "🥈 " + clean
+			elif clean.begins_with("2 ") or clean.begins_with("2\t") or "🥈" in clean:
 				lbl.add_theme_color_override("font_color", Color(0.9, 0.92, 0.95))
-			elif clean.begins_with("3 ") or clean.begins_with("3\t"):
-				lbl.text = "🥉 " + clean
+			elif clean.begins_with("3 ") or clean.begins_with("3\t") or "🥉" in clean:
 				lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.45))
 			else:
 				lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
@@ -1557,20 +1976,14 @@ func _render_leaderboard_text(raw_text: String) -> void:
 
 ## 退出到登录页
 func _on_exit_to_login() -> void:
-	if NetworkClient.is_connected:
-		NetworkClient.send_raw("quit")
-		var tree = get_tree()
-		if tree and is_inside_tree():
-			await tree.create_timer(0.15).timeout
-		NetworkClient.disconnect_server(true)
-	GameState.reset_on_logout()
+	await NetworkClient.safe_quit_and_disconnect()
 	var tree = get_tree()
 	if tree and is_inside_tree():
 		tree.change_scene_to_file("res://scenes/login/login_screen.tscn")
 
 func _on_reconnected_to_server() -> void:
 	print("[TownHub] ★★★ 断线重连成功，正在同步主城大本营状态 ★★★")
-	_show_toast("已重新连接战网！正在同步主城状态...")
+	_show_toast("已重新连接服务器！正在同步主城状态...")
 	if NetworkClient.is_connected:
 		NetworkClient.send_raw("look")
 		NetworkClient.send_raw("gscore")

@@ -5,6 +5,8 @@ class_name AFK_CollapsibleChatPanel
 ## 放置于战斗视口左下角(红球上方)，收起时为24px微型跑马灯条，展开时为140px完整聊天视窗
 
 signal item_inspected(file_id: String)
+signal item_hovered(file_id: String)
+signal item_unhovered()
 signal focus_changed(is_focused: bool)
 
 # 节点引用
@@ -62,6 +64,8 @@ func _connect_signals() -> void:
 			
 	if chat_log:
 		chat_log.meta_clicked.connect(_on_meta_clicked)
+		chat_log.meta_hover_started.connect(_on_meta_hover_started)
+		chat_log.meta_hover_ended.connect(_on_meta_hover_ended)
 		
 	# 监听全局消息流
 	if GameState.has_signal("chat_message_added"):
@@ -72,14 +76,14 @@ func _load_initial_history() -> void:
 	if chat_log:
 		chat_log.clear()
 		for msg in GameState.chat_history:
-			chat_log.append_text(msg + "\n")
+			chat_log.append_text(msg.strip_edges(false, true) + "\n")
 	if lbl_snippet:
 		lbl_snippet.text = AnsiHelper.strip_bbcode(GameState.latest_chat_snippet)
 
 ## 全局消息更新事件响应
 func _on_global_chat_message_added(bbcode: String, snippet: String) -> void:
 	if chat_log:
-		chat_log.append_text(bbcode + "\n")
+		chat_log.append_text(bbcode.strip_edges(false, true) + "\n")
 	if lbl_snippet:
 		lbl_snippet.text = AnsiHelper.strip_bbcode(snippet)
 
@@ -170,6 +174,19 @@ func _on_meta_clicked(meta: Variant) -> void:
 		var cmd = meta_str.substr(5)
 		if NetworkClient.is_connected:
 			NetworkClient.send_raw(cmd)
+
+## 鼠标悬停富文本超链接
+func _on_meta_hover_started(meta: Variant) -> void:
+	var meta_str = str(meta).strip_edges()
+	if meta_str.begins_with("item:"):
+		var file_id = meta_str.substr(5)
+		item_hovered.emit(file_id)
+
+## 鼠标移出富文本超链接
+func _on_meta_hover_ended(meta: Variant) -> void:
+	var meta_str = str(meta).strip_edges()
+	if meta_str.begins_with("item:"):
+		item_unhovered.emit()
 
 ## 快捷键阻断与处理
 func _unhandled_input(event: InputEvent) -> void:

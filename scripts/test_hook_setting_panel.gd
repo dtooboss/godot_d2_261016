@@ -42,17 +42,21 @@ func _run_tests() -> void:
 	var mock_server_data = {
 		"auto_next_stage": 1,
 		"hook_potions": "hp5,rvl",
-		"auto_potion_pct": 65
+		"auto_potion_pct": 65,
+		"auto_skills": "energy_shield,thunder_storm,frozen_armor"
 	}
 	panel._on_json_frame_received("afk_settings", mock_server_data)
 	await process_frame
 	assert(panel.chk_auto_next.button_pressed == true, "推图模式复选框应被勾选")
 	assert(panel.potion_slots[0] == "hp5", "槽位 1 药水代码应为 hp5")
 	assert(panel.potion_slots[1] == "rvl", "槽位 2 药水代码应为 rvl")
+	assert(panel.auto_skill_slots[0] == "energy_shield", "巡检槽位 1 应为 energy_shield")
+	assert(panel.auto_skill_slots[1] == "thunder_storm", "巡检槽位 2 应为 thunder_storm")
+	assert(panel.auto_skill_slots[2] == "frozen_armor", "巡检槽位 3 应为 frozen_armor")
 	assert(panel.slider_potion_pct.value == 65, "喝药阈值滑条应同步为 65")
 	assert("65%" in panel.label_potion_pct.text, "喝药阈值标签应显示 65%")
-	print("✔ 真实网络帧 afk_settings 成功驱动 UI 同步：推图=%s, 槽位1=%s, 槽位2=%s, 喝药阈值=%d%%" % [
-		panel.chk_auto_next.button_pressed, panel.potion_slots[0], panel.potion_slots[1], panel.slider_potion_pct.value
+	print("✔ 真实网络帧 afk_settings 成功驱动 UI 同步：推图=%s, 槽位1=%s, 槽位2=%s, 巡检技能=%s, 喝药阈值=%d%%" % [
+		panel.chk_auto_next.button_pressed, panel.potion_slots[0], panel.potion_slots[1], str(panel.auto_skill_slots), panel.slider_potion_pct.value
 	])
 
 	# 测试点 2.1: 模拟玩家拖动滑条调整喝药阈值到 40%
@@ -92,6 +96,16 @@ func _run_tests() -> void:
 	assert(panel.potion_slots[1] == "", "槽位 2 右键清空后应为空")
 	print("✔ 右键清空槽位成功：槽位 2 已变为空槽")
 
+	# 测试点 4.5: 自动巡检技能槽位互斥检测与自动替换
+	print("\n--- 测试点 4.5: 巡检槽位同系互斥检测 (如冰封甲与碎冰甲互斥) ---")
+	assert(panel.auto_skill_slots[2] == "frozen_armor", "当前槽位 3 应为冰封甲")
+	# 模拟在槽位 4 选入同属 sor_armor 的碎冰甲 shiver_armor
+	panel.set_slot_auto_skill(3, "shiver_armor")
+	await process_frame
+	assert(panel.auto_skill_slots[2] == "", "原槽位 3 的冰封甲应被自动剔除清空以防互斥冲突")
+	assert(panel.auto_skill_slots[3] == "shiver_armor", "槽位 4 应成功装入碎冰甲")
+	print("✔ 互斥拦截与自动替换生效：槽位 3 冰封甲已清空，槽位 4 碎冰甲已装载！")
+
 	# 测试点 5: 保存设置与信号捕获
 	print("\n--- 测试点 5: 保存设置并验证 settings_saved 信号 ---")
 	var captured_cfg = {}
@@ -106,6 +120,11 @@ func _run_tests() -> void:
 	var saved_pots = captured_cfg.get("hook_potions", [])
 	assert("hp5" in saved_pots, "保存的药水序列应包含 hp5")
 	assert("mp4" in saved_pots, "保存的药水序列应包含 mp4")
+	var saved_skills = captured_cfg.get("auto_skills", [])
+	assert("energy_shield" in saved_skills, "保存的巡检技能应包含 energy_shield")
+	assert("thunder_storm" in saved_skills, "保存的巡检技能应包含 thunder_storm")
+	assert("shiver_armor" in saved_skills, "保存的巡检技能应包含 shiver_armor")
+	assert(not ("frozen_armor" in saved_skills), "互斥旧技能 frozen_armor 不应存在")
 	assert(panel.visible == false, "保存后面板应自动隐藏")
 	print("✔ 保存成功！捕获配置: %s，面板已关闭" % str(captured_cfg))
 

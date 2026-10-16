@@ -11,6 +11,12 @@ const FX_SPIKE_TEX = preload("res://assets/fx/fx_spike.png")
 const FX_FLARE_TEX = preload("res://assets/fx/fx_flare.png")
 const ATTACK_EFFECT_TEX = preload("res://assets/images/attack_effect.png")
 
+# 纯参数化粒子特效场景 (参考 GODOT-VFX-LIBRARY，零贴图依赖)
+const BLOOD_SPLASH_SCENE = preload("res://scenes/vfx/blood_splash.tscn")
+const SHIELD_BREAK_SCENE = preload("res://scenes/vfx/shield_break.tscn")
+const ENERGY_BURST_SCENE = preload("res://scenes/vfx/energy_burst.tscn")
+const ICE_FROST_SCENE = preload("res://scenes/vfx/ice_frost.tscn")
+
 # 暗黑 6 系元素高通透发光色阶 (高亮白炽内核 + 饱和外晕)
 const ELEMENT_COLORS = {
 	"物理": Color(0.92, 0.90, 0.85, 1.0),
@@ -31,12 +37,62 @@ const ELEMENT_COLORS = {
 # 默认发光材质 (Additive 混合模式，赋予暗黑魔法通透质感)
 var _additive_material: CanvasItemMaterial = null
 
+# Token 栈式时间缩放/顿帧管理 (多技能命中并发安全)
+var _time_scale_requests: Dictionary = {}
+var _time_scale_token_counter: int = 0
+var _time_scale_original: float = 1.0
+
 func _init() -> void:
 	_additive_material = CanvasItemMaterial.new()
 	_additive_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 
 func _ready() -> void:
 	z_index = 10 # 确保处于怪物本体上方、HUD 界面下方
+	tree_exiting.connect(_cleanup_on_exit)
+
+func _cleanup_on_exit() -> void:
+	_time_scale_requests.clear()
+	Engine.time_scale = 1.0
+
+## Token 栈式顿帧 (Hit-stop: 暴击/斩杀时微小时间定格，大幅提升打击分量感)
+func freeze_frame(duration: float = 0.045, time_scale: float = 0.1) -> void:
+	if not is_inside_tree(): return
+	var token = _time_scale_token_counter
+	_time_scale_token_counter += 1
+	if _time_scale_requests.is_empty():
+		_time_scale_original = Engine.time_scale
+	_time_scale_requests[token] = clampf(time_scale, 0.0, 1.0)
+	_apply_time_scale_requests()
+	
+	get_tree().create_timer(duration, true, false, true).timeout.connect(_on_freeze_timeout.bind(token))
+
+func _on_freeze_timeout(token: int) -> void:
+	if is_inside_tree():
+		_time_scale_requests.erase(token)
+		_apply_time_scale_requests()
+
+func _apply_time_scale_requests() -> void:
+	if _time_scale_requests.is_empty():
+		Engine.time_scale = _time_scale_original
+		return
+	var min_req: float = 1.0
+	for v in _time_scale_requests.values():
+		min_req = minf(min_req, float(v))
+	Engine.time_scale = minf(_time_scale_original, min_req)
+
+## 轻量相机微震屏 (暴击/高能技能命中短促震动，杜绝眩晕)
+func screen_shake(intensity: float = 3.5, duration: float = 0.09) -> void:
+	var cam = get_viewport().get_camera_2d()
+	if not cam: return
+	var orig_offset = cam.offset
+	var tw = create_tween().bind_node(self)
+	tw.set_ease(Tween.EASE_OUT)
+	var steps = 2
+	var step_dur = duration / float(steps)
+	for i in range(steps):
+		var offset = Vector2(randf_range(-intensity, intensity), randf_range(-intensity, intensity))
+		tw.tween_property(cam, "offset", orig_offset + offset, step_dur)
+	tw.tween_property(cam, "offset", orig_offset, step_dur * 0.5)
 
 ## 统一对外调度入口 (支持形态分类、数量阵列、玩家与怪物双轨分流)
 func play_combat_fx(
@@ -71,6 +127,12 @@ func play_combat_fx(
 	var fx_type = fx_type_override if not fx_type_override.is_empty() else _detect_fx_type(skill_code, elem)
 	
 	match fx_type:
+		"thunder_storm":
+			_spawn_thunder_storm(target_pos, col, on_hit, is_crit)
+		"sky_fall":
+			_spawn_sky_fall(target_pos, skill_code, col, on_hit, is_crit, is_from_player)
+		"radial_nova":
+			_spawn_radial_nova(actual_start, actual_target, skill_code, col, on_hit, is_crit)
 		"charged_strike":
 			_spawn_charged_strike(target_pos, col, on_hit, is_crit)
 		"lightning_fury":
@@ -275,9 +337,10 @@ func _on_projectile_arrived(
 	is_crit: bool,
 	on_hit: Callable,
 	proj: Node2D,
-	trail: Line2D
+	trail: Line2D,
+	elem: String = ""
 ) -> void:
-	_spawn_hit_impact(target_pos, color, is_crit)
+	_spawn_hit_impact(target_pos, color, is_crit, elem)
 	if on_hit.is_valid():
 		on_hit.call()
 		
@@ -336,7 +399,7 @@ func _spawn_lightning(
 	inner_line.add_point(target_pos)
 	
 	# 瞬间触发命中结算
-	_spawn_hit_impact(target_pos, Color(1.3, 1.3, 1.5), is_crit)
+	_spawn_hit_impact(target_pos, Color(1.3, 1.3, 1.5), is_crit, "电")
 	if on_hit.is_valid():
 		on_hit.call()
 		
@@ -372,7 +435,7 @@ func _spawn_melee_slash(
 	slash.add_child(sp)
 	
 	# 立即触发击中回调，刀光瞬间扩张并淡出 (0.11s)
-	_spawn_hit_impact(target_pos, color, is_crit)
+	_spawn_hit_impact(target_pos, color, is_crit, "物理")
 	if on_hit.is_valid():
 		on_hit.call()
 		
@@ -382,8 +445,8 @@ func _spawn_melee_slash(
 	tw.tween_property(sp, "modulate:a", 0.0, 0.06)
 	tw.tween_callback(slash.queue_free)
 
-## 4. 击中爆点微光 (Hit Impact - 星芒高光爆裂)
-func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool) -> void:
+## 4. 击中爆点微光与物理/元素爆裂粒子 (Hit Impact + Particle Burst)
+func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool, elem: String = "") -> void:
 	var impact = Sprite2D.new()
 	impact.global_position = pos
 	impact.texture = FX_FLARE_TEX
@@ -400,6 +463,47 @@ func _spawn_hit_impact(pos: Vector2, color: Color, is_crit: bool) -> void:
 	tw.tween_property(impact, "rotation", randf_range(0.3, 0.8), 0.09)
 	tw.tween_property(impact, "modulate:a", 0.0, 0.10).set_ease(Tween.EASE_IN)
 	tw.chain().tween_callback(impact.queue_free)
+
+	_spawn_element_particles(pos, elem, color, is_crit)
+
+## 派发无贴图纯参数化打击粒子 (血溅/冰渣/烈焰爆裂)
+func _spawn_element_particles(pos: Vector2, elem: String, color: Color, is_crit: bool) -> void:
+	var el = elem.to_lower()
+	var particle_scene: PackedScene = null
+	
+	if "冰" in el or "cold" in el:
+		particle_scene = ICE_FROST_SCENE
+	elif "火" in el or "fire" in el or "魔" in el:
+		particle_scene = ENERGY_BURST_SCENE
+	elif is_crit or "物" in el or "phys" in el:
+		particle_scene = BLOOD_SPLASH_SCENE
+		
+	if particle_scene:
+		var p = particle_scene.instantiate()
+		p.global_position = pos
+		if p is CPUParticles2D:
+			p.emitting = true
+			p.one_shot = true
+		add_child(p)
+		var p_tw = p.create_tween()
+		p_tw.tween_interval(p.lifetime if p is CPUParticles2D else 0.55)
+		p_tw.tween_callback(p.queue_free)
+
+	if is_crit:
+		freeze_frame(0.045, 0.1)
+		screen_shake(3.5, 0.09)
+
+## 触发格挡护盾破碎粒子 (Block Feedback)
+func play_shield_block(pos: Vector2) -> void:
+	var p = SHIELD_BREAK_SCENE.instantiate()
+	p.global_position = pos
+	if p is CPUParticles2D:
+		p.emitting = true
+		p.one_shot = true
+	add_child(p)
+	var p_tw = p.create_tween()
+	p_tw.tween_interval(0.55)
+	p_tw.tween_callback(p.queue_free)
 
 ## 工具函数：推断元素色彩 (综合 elem 与 skill_code 原生属性，杜绝微小附魔词缀喧宾夺主)
 func _get_element_color(elem: String, skill_code: String = "") -> Color:
@@ -458,41 +562,40 @@ func _spawn_charged_strike(target_pos: Vector2, color: Color, on_hit: Callable, 
 
 ## 6. 亚马逊·雷霆之怒 (Lightning Fury)：雷神之矛飞掷 + 环状全屏群雷暴轰
 func _spawn_lightning_fury(start_pos: Vector2, target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool, is_from_player: bool) -> void:
-	# 阶段 1: 投掷实体高能闪电标枪
-	var on_fury_impact = func():
-		if on_hit.is_valid():
-			on_hit.call()
-		# 阶段 2: 目标处剧烈雷核核爆 + 向全屏四周爆发 10 道放射状折线雷霆
-		_spawn_hit_impact(target_pos, Color(1.5, 1.6, 2.0), true)
-		
-		var ray_count = 10
-		for r in range(ray_count):
-			var angle = float(r) * (TAU / float(ray_count)) + randf_range(-0.25, 0.25)
-			var ray_dir = Vector2.RIGHT.rotated(angle)
-			var ray_len = randf_range(80.0, 140.0)
-			var ray_end = target_pos + ray_dir * ray_len
-			
-			var ray_line = Line2D.new()
-			ray_line.material = _additive_material
-			ray_line.default_color = Color(1.4, 1.5, 1.8, 0.9)
-			ray_line.width = 3.2 if is_crit else 2.2
-			ray_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
-			ray_line.end_cap_mode = Line2D.LINE_CAP_ROUND
-			add_child(ray_line)
-			
-			# 生成折线
-			ray_line.add_point(target_pos)
-			var mid1 = target_pos + ray_dir * (ray_len * 0.35) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
-			var mid2 = target_pos + ray_dir * (ray_len * 0.70) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
-			ray_line.add_point(mid1)
-			ray_line.add_point(mid2)
-			ray_line.add_point(ray_end)
-			
-			var tw = create_tween().bind_node(ray_line)
-			tw.tween_property(ray_line, "modulate:a", 0.0, 0.12).set_ease(Tween.EASE_IN)
-			tw.tween_callback(ray_line.queue_free)
+	_spawn_projectile(start_pos, target_pos, "spike", Color(1.3, 1.4, 1.8), _on_fury_impact.bind(target_pos, on_hit, is_crit), is_crit, is_from_player)
 
-	_spawn_projectile(start_pos, target_pos, "spike", Color(1.3, 1.4, 1.8), on_fury_impact, is_crit, is_from_player)
+func _on_fury_impact(target_pos: Vector2, on_hit: Callable, is_crit: bool) -> void:
+	if on_hit.is_valid():
+		on_hit.call()
+	# 阶段 2: 目标处剧烈雷核核爆 + 向全屏四周爆发 10 道放射状折线雷霆
+	_spawn_hit_impact(target_pos, Color(1.5, 1.6, 2.0), true, "电")
+	
+	var ray_count = 10
+	for r in range(ray_count):
+		var angle = float(r) * (TAU / float(ray_count)) + randf_range(-0.25, 0.25)
+		var ray_dir = Vector2.RIGHT.rotated(angle)
+		var ray_len = randf_range(80.0, 140.0)
+		var ray_end = target_pos + ray_dir * ray_len
+		
+		var ray_line = Line2D.new()
+		ray_line.material = _additive_material
+		ray_line.default_color = Color(1.4, 1.5, 1.8, 0.9)
+		ray_line.width = 3.2 if is_crit else 2.2
+		ray_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		ray_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+		add_child(ray_line)
+		
+		# 生成折线
+		ray_line.add_point(target_pos)
+		var mid1 = target_pos + ray_dir * (ray_len * 0.35) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
+		var mid2 = target_pos + ray_dir * (ray_len * 0.70) + ray_dir.orthogonal() * randf_range(-10.0, 10.0)
+		ray_line.add_point(mid1)
+		ray_line.add_point(mid2)
+		ray_line.add_point(ray_end)
+		
+		var tw = create_tween().bind_node(ray_line)
+		tw.tween_property(ray_line, "modulate:a", 0.0, 0.12).set_ease(Tween.EASE_IN)
+		tw.tween_callback(ray_line.queue_free)
 
 ## 7. 亚马逊·闪电标枪 (Lightning Bolt)：高光电弧缠绕的实体长矛投掷
 func _spawn_lightning_javelin(start_pos: Vector2, target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool, is_from_player: bool) -> void:
@@ -530,11 +633,115 @@ func _spawn_spear_thrust(target_pos: Vector2, color: Color, on_hit: Callable, is
 	tw.tween_property(sp, "modulate:a", 0.0, 0.06)
 	tw.tween_callback(thrust.queue_free)
 
-## 工具函数：推断特效表现类型 (支持专属技能分流 + hammer/arrow/spike/orb/lightning/melee)
+## 10. 雷暴术 (Thunder Storm)：苍穹虚空垂直疾速劈落白炽双层折线天雷 + 触地电火花炸裂
+func _spawn_thunder_storm(target_pos: Vector2, color: Color, on_hit: Callable, is_crit: bool) -> void:
+	var start_pos = target_pos - Vector2(randf_range(-15.0, 15.0), 260.0)
+	var seg_count = 6
+	var points: Array[Vector2] = []
+	points.append(start_pos)
+	
+	for i in range(1, seg_count):
+		var t = float(i) / float(seg_count)
+		var pt = start_pos.lerp(target_pos, t)
+		var jitter_x = randf_range(-22.0, 22.0)
+		points.append(pt + Vector2(jitter_x, 0))
+	points.append(target_pos)
+
+	# 1. 外层发光电离折线 (青蓝电晕)
+	var outer_line = Line2D.new()
+	outer_line.material = _additive_material
+	outer_line.default_color = Color(0.35, 0.75, 1.25, 0.75)
+	outer_line.width = 6.0 if is_crit else 4.5
+	outer_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	outer_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	for pt in points:
+		outer_line.add_point(pt)
+	add_child(outer_line)
+
+	# 2. 内层高能白炽电芯 (刺目银白)
+	var inner_line = Line2D.new()
+	inner_line.material = _additive_material
+	inner_line.default_color = Color(1.6, 1.7, 2.0, 1.0)
+	inner_line.width = 2.4 if is_crit else 1.8
+	inner_line.begin_cap_mode = Line2D.LINE_CAP_ROUND
+	inner_line.end_cap_mode = Line2D.LINE_CAP_ROUND
+	for pt in points:
+		inner_line.add_point(pt)
+	add_child(inner_line)
+
+	# 3. 产生 1 道微小折线分叉 (增加闪电真实感)
+	var fork_line = Line2D.new()
+	fork_line.material = _additive_material
+	fork_line.default_color = Color(0.8, 1.2, 1.8, 0.8)
+	fork_line.width = 1.4
+	var fork_start_idx = seg_count / 2
+	var f_start = points[fork_start_idx]
+	var f_mid = f_start + Vector2(randf_range(-28.0, 28.0), 30.0)
+	var f_end = f_mid + Vector2(randf_range(-20.0, 20.0), 25.0)
+	fork_line.add_point(f_start)
+	fork_line.add_point(f_mid)
+	fork_line.add_point(f_end)
+	add_child(fork_line)
+
+	# 4. 瞬态落地 (0.045s 极速落雷)，触发命中反馈
+	var tw = create_tween().bind_node(self)
+	tw.tween_interval(0.045)
+	tw.tween_callback(func():
+		if on_hit.is_valid():
+			on_hit.call()
+		screen_shake(3.2 if is_crit else 2.2, 0.08)
+		_spawn_thunder_impact_sparks(target_pos, is_crit)
+	)
+
+	# 5. 电光 0.12s 极速淡出销毁
+	var tw_fade = create_tween().bind_node(outer_line)
+	tw_fade.tween_property(outer_line, "modulate:a", 0.0, 0.12).set_ease(Tween.EASE_OUT)
+	tw_fade.tween_callback(outer_line.queue_free)
+
+	var tw_inner = create_tween().bind_node(inner_line)
+	tw_inner.tween_property(inner_line, "modulate:a", 0.0, 0.10).set_ease(Tween.EASE_OUT)
+	tw_inner.tween_callback(inner_line.queue_free)
+
+	var tw_fork = create_tween().bind_node(fork_line)
+	tw_fork.tween_property(fork_line, "modulate:a", 0.0, 0.09).set_ease(Tween.EASE_OUT)
+	tw_fork.tween_callback(fork_line.queue_free)
+
+## 雷暴触地高光电火花炸裂
+func _spawn_thunder_impact_sparks(pos: Vector2, is_crit: bool) -> void:
+	var spark_count = 8 if is_crit else 5
+	for i in range(spark_count):
+		var spark = Line2D.new()
+		spark.material = _additive_material
+		spark.default_color = Color(1.5, 1.6, 2.0, 1.0)
+		spark.width = 1.8 if is_crit else 1.2
+		var angle = randf_range(0.0, TAU)
+		var s_dir = Vector2.RIGHT.rotated(angle)
+		var dist = randf_range(16.0, 36.0)
+		spark.add_point(pos)
+		spark.add_point(pos + s_dir * dist)
+		add_child(spark)
+
+		var tw = create_tween().bind_node(spark)
+		tw.tween_property(spark, "modulate:a", 0.0, 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(spark.queue_free)
+
+## 工具函数：推断特效表现类型 (支持专属技能分流 + sky_fall/radial_nova/hammer/arrow/spike/orb/lightning/melee)
 func _detect_fx_type(skill_code: String, elem: String) -> String:
 	var sk = skill_code.to_lower()
 	
-	# 0. 亚马逊专属标枪电系特征细化分流
+	# 0. 空间宏观形态：天降坠击型 (暴风雪/陨石/天罚)
+	if "blizzard" in sk or "meteor" in sk or "armageddon" in sk or "heavens_fist" in sk:
+		return "sky_fall"
+
+	# 0.5 专属形态：雷暴术 (Thunder Storm，天罚垂直疾速折线落雷)
+	if "thunder_storm" in sk or (sk == "thunder_storm"):
+		return "thunder_storm"
+		
+	# 1. 空间宏观形态：环形新星型 (霜之新星/剧毒新星/神圣新星)
+	if "nova" in sk:
+		return "radial_nova"
+	
+	# 2. 亚马逊专属标枪电系特征细化分流
 	if sk == "charged_strike":
 		return "charged_strike" # 充能一击：刺击 + 炸出多道乱窜电荷弹
 	if sk == "lightning_fury":
@@ -546,25 +753,126 @@ func _detect_fx_type(skill_code: String, elem: String) -> String:
 	if sk in ["power_strike", "jab", "fend", "impale"]:
 		return "spear_thrust" # 近战长矛/标枪迅捷戳刺
 		
-	# 1. 战锤型
+	# 3. 战锤型
 	if "hammer" in sk:
 		return "hammer"
 		
-	# 2. 闪电型
+	# 4. 闪电型
 	if "lightning" in sk or "chain" in sk or ("bolt" in sk and "light" in elem):
 		return "lightning"
 		
-	# 3. 箭矢型
+	# 5. 箭矢型
 	if "arrow" in sk or "shot" in sk or "strafe" in sk:
 		return "arrow"
 		
-	# 4. 尖刺/骨矛/标枪型
+	# 6. 尖刺/骨矛/标枪型
 	if "spear" in sk or "spike" in sk or "javelin" in sk:
 		return "spike"
 		
-	# 5. 经典近战或普通挥击判定
+	# 7. 经典近战或普通挥击判定
 	if sk in ["attack", "frenzy", "zeal", "bash", "stun", "concentrate", "smite", "berserk", "venom"]:
 		return "melee"
 		
-	# 6. 法球/火球/冰弹/其它
+	# 8. 法球/火球/冰弹/其它
 	return "orb"
+
+## 10. 天降坠击型技能 (Sky Fall: 暴风雪/陨石/天罚，高空垂直加速砸落，地面爆开元素圈)
+func _spawn_sky_fall(
+	target_pos: Vector2,
+	skill_code: String,
+	color: Color,
+	on_hit: Callable,
+	is_crit: bool,
+	is_from_player: bool
+) -> void:
+	var sk = skill_code.to_lower()
+	var is_blizzard = "blizzard" in sk
+	var shard_count = 3 if is_blizzard else 1
+	var fall_h = 240.0
+	
+	for i in range(shard_count):
+		var x_offset = (float(i) - float(shard_count - 1) * 0.5) * 26.0 + randf_range(-6.0, 6.0)
+		var shard_target = target_pos + Vector2(x_offset, randf_range(-8.0, 8.0))
+		var shard_start = shard_target + Vector2(randf_range(-15.0, 15.0), -fall_h)
+		
+		var proj = Node2D.new()
+		proj.global_position = shard_start
+		add_child(proj)
+		
+		var sp = Sprite2D.new()
+		sp.texture = FX_SPIKE_TEX if is_blizzard else FX_ORB_TEX
+		sp.material = _additive_material
+		sp.modulate = color
+		sp.scale = Vector2(0.22, 0.45) if is_blizzard else Vector2(0.42, 0.42)
+		sp.rotation = PI * 0.5 # 尖端垂直朝下
+		proj.add_child(sp)
+		
+		var trail = Line2D.new()
+		trail.material = _additive_material
+		trail.width = 4.5
+		trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
+		trail.end_cap_mode = Line2D.LINE_CAP_ROUND
+		var grad = Gradient.new()
+		grad.set_color(0, Color(color.r, color.g, color.b, 0.0))
+		grad.set_color(1, Color(color.r * 1.2, color.g * 1.2, color.b * 1.2, 0.85))
+		trail.gradient = grad
+		add_child(trail)
+		
+		var dur = 0.13 + float(i) * 0.035
+		var tw = create_tween().bind_node(proj)
+		tw.set_ease(Tween.EASE_IN)
+		var sub_on_hit = on_hit if i == 0 else Callable()
+		
+		tw.tween_method(
+			_update_projectile_straight.bind(proj, sp, trail, shard_start, shard_target, false, sp.scale),
+			0.0, 1.0, dur
+		)
+		var shard_elem = "冰" if is_blizzard else "火"
+		tw.tween_callback(
+			_on_projectile_arrived.bind(shard_target, color, is_crit, sub_on_hit, proj, trail, shard_elem)
+		)
+
+## 11. 环形新星型技能 (Radial Nova: 霜之新星/剧毒新星，360度冲击波环与辐射散射)
+func _spawn_radial_nova(
+	start_pos: Vector2,
+	target_pos: Vector2,
+	skill_code: String,
+	color: Color,
+	on_hit: Callable,
+	is_crit: bool
+) -> void:
+	var center = target_pos
+	var ring = Line2D.new()
+	ring.material = _additive_material
+	ring.default_color = color
+	ring.width = 4.5
+	ring.closed = true
+	add_child(ring)
+	
+	var pt_count = 20
+	for p in range(pt_count):
+		var ang = float(p) * (TAU / float(pt_count))
+		ring.add_point(center + Vector2.RIGHT.rotated(ang) * 6.0)
+		
+	var tw = create_tween().bind_node(ring)
+	var max_r = 95.0
+	tw.tween_method(_update_nova_ring.bind(ring, center, pt_count), 6.0, max_r, 0.16).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(ring, "modulate:a", 0.0, 0.16).set_delay(0.05)
+	tw.tween_callback(ring.queue_free)
+	
+	# 周围放射 8 发元素爆裂微斑
+	for k in range(8):
+		var ray_ang = float(k) * (TAU / 8.0)
+		var ray_target = center + Vector2.RIGHT.rotated(ray_ang) * (max_r * 0.8)
+		_spawn_hit_impact(ray_target, color * 0.75, false, "冰" if "frost" in skill_code else "毒")
+		
+	_spawn_hit_impact(center, color, is_crit, "冰" if "frost" in skill_code else "毒")
+	if on_hit.is_valid():
+		on_hit.call()
+
+func _update_nova_ring(r: float, ring: Line2D, center: Vector2, pt_count: int) -> void:
+	if not is_instance_valid(ring): return
+	ring.clear_points()
+	for p in range(pt_count):
+		var ang = float(p) * (TAU / float(pt_count))
+		ring.add_point(center + Vector2.RIGHT.rotated(ang) * r)

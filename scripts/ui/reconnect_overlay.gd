@@ -108,12 +108,18 @@ func _on_reconnect_failed() -> void:
 	lbl_status.text = "❌ 无法连通服务器，请检查网络后重试"
 	btn_box.visible = true
 
+func hide_overlay() -> void:
+	if fade_tween and fade_tween.is_valid():
+		fade_tween.kill()
+	visible = false
+	if btn_box:
+		btn_box.visible = false
+
 func _on_retry_pressed() -> void:
 	btn_box.visible = false
 	NetworkClient.retry_reconnect()
 
 func _on_logout_pressed() -> void:
-	visible = false
-	NetworkClient.disconnect_server(true)
-	GameState.reset_on_logout()
+	hide_overlay()
+	await NetworkClient.safe_quit_and_disconnect()
 	get_tree().change_scene_to_file("res://scenes/login/login_screen.tscn")

@@ -3,6 +3,7 @@ class_name AFK_MonsterDisplay
 
 const MonsterTextureMgr = preload("res://scripts/managers/monster_texture_manager.gd")
 const AnsiHelperScript = preload("res://scripts/utils/ansi_helper.gd")
+const MONSTER_STATUS_SHADER = preload("res://shaders/combat/monster_status.gdshader")
 
 @onready var sprite: TextureRect = %MonsterSprite
 @onready var name_label: Label = %MonsterNameLabel
@@ -38,26 +39,41 @@ var _hit_tween: Tween = null
 var _hp_tween: Tween = null
 var _is_in_hit_anim: bool = false
 
-# DoT 状态机
+# DoT 与控制状态机与着色器材质
 var is_poisoned: bool = false
 var is_chilled: bool = false
+var is_stunned: bool = false
 var dot_color: Color = Color.WHITE
+var _status_material: ShaderMaterial = null
 
 # 攻击条模拟
 var attack_timer: float = 0.0
 var attack_duration: float = 2.0
+var _attack_fill_style: StyleBoxFlat = null
 
 func _ready() -> void:
 	# 随机化呼吸相位差，彻底杜绝群怪机械同步
 	breath_time = randf_range(0.0, 6.28)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	# 彻底告别哥布林！初始化时清空占位贴图并保持隐藏，等待服务端真实数据注入
-	if sprite: sprite.texture = null
+	if sprite:
+		sprite.texture = null
+		_status_material = ShaderMaterial.new()
+		_status_material.shader = MONSTER_STATUS_SHADER
+		sprite.material = _status_material
 	visible = false
 	if name_label: name_label.text = "正在索敌..."
 	if hp_label: hp_label.text = "0/0"
 	if hp_bar: hp_bar.value = 100.0
 	if skill_label: skill_label.text = "准备中"
+	if attack_bar:
+		var base_fill = attack_bar.get_theme_stylebox("fill")
+		if base_fill is StyleBoxFlat:
+			_attack_fill_style = base_fill.duplicate()
+		else:
+			_attack_fill_style = StyleBoxFlat.new()
+			_attack_fill_style.bg_color = Color(1.0, 1.0, 0.0, 1.0)
+		attack_bar.add_theme_stylebox_override("fill", _attack_fill_style)
 	_update_pivot()
 
 func _process(delta: float) -> void:
@@ -65,9 +81,11 @@ func _process(delta: float) -> void:
 	if is_breathing_enabled and sprite and not _is_in_hit_anim:
 		_process_breathing(delta)
 		
-	# 2. 怪物攻击动作条平滑推进
+	# 2. 怪物攻击动作条平滑推进 (眩晕时冻结进度条)
 	if attack_bar and attack_duration > 0.0 and not is_dying:
 		var speed_mult = 0.5 if is_chilled else 1.0
+		if is_stunned:
+			speed_mult = 0.0 # 眩晕期间攻击条冻结，不可出招
 		attack_timer += delta * speed_mult
 		if attack_timer >= attack_duration * 1.5:
 			attack_timer = 0.0
@@ -193,13 +211,24 @@ func _render_debuffs(debuff_list: Array) -> void:
 
 	if debuff_list.is_empty():
 		debuff_box.visible = false
+		is_stunned = false
 		return
 
 	debuff_box.visible = true
+	is_stunned = false
 	for item in debuff_list:
 		if not item is Dictionary: continue
 		var did = str(item.get("id", ""))
+		if did == "stun":
+			is_stunned = true
 		var dname = str(item.get("name", "减益"))
+		match dname:
+			"伤害加深": dname = "加深"
+			"降低抗性": dname = "降抗"
+			"铁处女": dname = "铁女"
+			"生命偷取", "偷取生命": dname = "吸血"
+			"微暗灵视": dname = "致盲"
+			"眩晕": dname = "眩晕"
 		var dcol_hex = str(item.get("color", "#ff4444"))
 		var dcol = Color.from_string(dcol_hex, Color(1.0, 0.27, 0.27))
 		
@@ -228,11 +257,13 @@ func _render_debuffs(debuff_list: Array) -> void:
 		elif did == "poison": icon_sym = "🧪"
 		elif did == "chill": icon_sym = "❄"
 		elif did == "clay_slow": icon_sym = "🗿"
+		elif did == "battle_cry": icon_sym = "📢"
+		elif did == "stun": icon_sym = "💫"
 		lbl.text = "%s %s" % [icon_sym, dname]
 		lbl.add_theme_font_size_override("font_size", 9)
 		lbl.add_theme_color_override("font_color", dcol)
 		badge.add_child(lbl)
-		badge.tooltip_text = "减益状态: %s" % dname
+		badge.tooltip_text = "减益状态: 眩晕 (无法出招与施法)" if did == "stun" else ("减益状态: %s" % dname)
 		debuff_box.add_child(badge)
 
 ## 更新当前生命值
@@ -250,8 +281,8 @@ func update_hp(hp: int, m_hp: int = -1) -> void:
 		_hp_tween = create_tween().bind_node(self)
 		_hp_tween.tween_property(hp_bar, "value", pct, 0.12).set_ease(Tween.EASE_OUT)
 
-## 触发真实受击动效 (受击硬直 + 红色闪白 + 弹性恢复)
-func play_hit_reaction(is_crit: bool = false) -> void:
+## 触发真实受击动效 (受击瞬间微形变 + 元素/暴击极速闪光 0.08s 闪烁后即刻恢复)
+func play_hit_reaction(is_crit: bool = false, elem: String = "") -> void:
 	if not sprite: return
 	
 	_is_in_hit_anim = true
@@ -259,33 +290,60 @@ func play_hit_reaction(is_crit: bool = false) -> void:
 		_hit_tween.kill()
 		
 	_hit_tween = create_tween()
-	# 1. 瞬间受击形变 (轻微下压后仰)
-	var hit_sy = base_scale * (0.88 if is_crit else 0.93)
-	var hit_sx = base_scale * (1.10 if is_crit else 1.05)
+	# 1. 瞬态受击微形变 (极其轻微下压，0.06s 迅速恢复)
+	var hit_sy = base_scale * (0.91 if is_crit else 0.95)
+	var hit_sx = base_scale * (1.07 if is_crit else 1.03)
 	
-	# 2. 闪红/闪白
-	var flash_col = Color(1.8, 0.4, 0.4, 1.0) if is_crit else Color(1.4, 0.7, 0.7, 1.0)
-	sprite.modulate = flash_col
+	# 2. 根据命中元素推断极速瞬态闪烁颜色 (闪烁一下即刻恢复原貌，杜绝长时间覆盖原画)
+	var el = elem.to_lower()
+	var flash_col = Color(1.2, 1.2, 1.2, 1.0) # 物理/默认白炽
+	if "冰" in el or "cold" in el:
+		flash_col = Color(0.45, 0.85, 1.3, 1.0) # 冰蓝霜闪
+	elif "毒" in el or "poison" in el:
+		flash_col = Color(0.35, 1.25, 0.45, 1.0) # 幽绿毒闪
+	elif "火" in el or "fire" in el:
+		flash_col = Color(1.35, 0.75, 0.25, 1.0) # 炽烈火闪
+	elif "电" in el or "light" in el:
+		flash_col = Color(1.3, 1.3, 1.6, 1.0) # 银白电闪
+	elif "魔" in el or "magic" in el:
+		flash_col = Color(1.3, 0.9, 1.3, 1.0) # 秘术紫金闪
+	elif is_crit:
+		flash_col = Color(1.35, 1.25, 0.8, 1.0) # 暴击黄金闪
 	
-	_hit_tween.tween_property(sprite, "scale", Vector2(hit_sx, hit_sy), 0.06).set_ease(Tween.EASE_OUT)
-	_hit_tween.parallel().tween_property(sprite, "modulate", _get_current_state_color(), 0.12).set_delay(0.04)
-	_hit_tween.tween_property(sprite, "scale", Vector2(base_scale, base_scale), 0.12).set_ease(Tween.EASE_OUT)
-	_hit_tween.tween_callback(func():
-		_is_in_hit_anim = false
-	)
+	if _status_material:
+		_status_material.set_shader_parameter("flash_color", flash_col)
+		_status_material.set_shader_parameter("flash_amount", 0.9)
+		_hit_tween.parallel().tween_method(_set_flash_amount, 0.9, 0.0, 0.08).set_ease(Tween.EASE_OUT)
+	else:
+		sprite.modulate = flash_col
+		_hit_tween.parallel().tween_property(sprite, "modulate", Color.WHITE, 0.08).set_ease(Tween.EASE_OUT)
+	
+	_hit_tween.tween_property(sprite, "scale", Vector2(hit_sx, hit_sy), 0.03).set_ease(Tween.EASE_OUT)
+	_hit_tween.tween_property(sprite, "scale", Vector2(base_scale, base_scale), 0.05).set_ease(Tween.EASE_OUT)
+	_hit_tween.tween_callback(_on_hit_anim_finished)
 
-## 设置 DoT 状态 (中剧毒/被冰冻)
+func _set_flash_amount(val: float) -> void:
+	if _status_material:
+		_status_material.set_shader_parameter("flash_amount", val)
+
+func _on_hit_anim_finished() -> void:
+	_is_in_hit_anim = false
+
+## 设置 DoT 状态 (中剧毒/被冰冻) - 仅保持极淡的环境微调(0.15)，绝不破坏立绘高清细节
 func set_dot_state(poison: bool, cold: bool) -> void:
 	is_poisoned = poison
 	is_chilled = cold
-	if not _is_in_hit_anim and sprite:
+	if _status_material:
+		_status_material.set_shader_parameter("poison_amount", 0.25 if poison else 0.0)
+		_status_material.set_shader_parameter("freeze_amount", 0.25 if cold else 0.0)
+	elif not _is_in_hit_anim and sprite:
 		sprite.modulate = _get_current_state_color()
 
 func _get_current_state_color() -> Color:
 	if is_poisoned:
-		return Color(0.45, 1.0, 0.45, 1.0) # 剧毒幽绿
+		return Color(0.9, 1.0, 0.9, 1.0)
 	if is_chilled:
-		return Color(0.55, 0.85, 1.0, 1.0) # 冰霜幽蓝
+		return Color(0.9, 0.95, 1.0, 1.0)
 	return Color.WHITE
 
 ## 升级 6 系暗黑原版元素飘字引擎 (含暴击大字与 AoE 扩散，支持自身高光大字与队友小字半透分流)
@@ -375,21 +433,59 @@ func _gui_input(event: InputEvent) -> void:
 		if not cur_id.is_empty() and not is_dying:
 			target_clicked.emit(cur_id)
 
-## 收到怪物真实出手事件时触发对齐与周期自适应更新
-func trigger_attack(interval: float = -1.0, skill_name: String = "") -> void:
-	if is_dying: return
+## 收到怪物真实出手事件时触发对齐与周期自适应更新 (支持冰/火/电/毒四系攻击条与文字主题渲染)
+func trigger_attack(interval: float = -1.0, skill_name: String = "", elem: String = "") -> void:
+	if is_dying or is_stunned: return
 	if interval > 0.05:
 		attack_duration = interval
 	attack_timer = 0.0
 	if attack_bar:
 		attack_bar.value = 0.0
 		attack_bar.visible = true
-	if skill_label:
-		var clean_name = AnsiHelperScript.to_plain_text(skill_name).strip_edges()
-		if clean_name.is_empty():
-			skill_label.text = "普通攻击"
+
+	var clean_name = AnsiHelperScript.to_plain_text(skill_name).strip_edges()
+	if clean_name.is_empty():
+		clean_name = "普通攻击"
+
+	# 解析攻击元素属性 (优先使用入参 elem，否则从 clean_name 智能推导)
+	var el = elem.strip_edges()
+	if el.is_empty():
+		if "火" in clean_name: el = "火"
+		elif "冰" in clean_name or "冻" in clean_name: el = "冰"
+		elif "电" in clean_name or "雷" in clean_name: el = "电"
+		elif "毒" in clean_name: el = "毒"
+
+	# 元素主题色配置 (火:炽焰橙红, 冰:霜雪天蓝, 电:金黄, 毒:剧毒翠绿, 物理/默认:明黄)
+	var bar_col := Color(1.0, 1.0, 0.0, 1.0)
+	var txt_col := Color(1.0, 1.0, 1.0, 1.0)
+	if "火" in el or "fire" in el.to_lower():
+		bar_col = Color(1.0, 0.42, 0.08, 1.0)
+		txt_col = Color(1.0, 0.95, 0.85, 1.0)
+	elif "冰" in el or "cold" in el.to_lower():
+		bar_col = Color(0.2, 0.68, 1.0, 1.0)
+		txt_col = Color(0.85, 0.95, 1.0, 1.0)
+	elif "电" in el or "light" in el.to_lower():
+		bar_col = Color(1.0, 0.92, 0.18, 1.0)
+		txt_col = Color(1.0, 1.0, 0.85, 1.0)
+	elif "毒" in el or "poison" in el.to_lower():
+		bar_col = Color(0.18, 0.88, 0.32, 1.0)
+		txt_col = Color(0.85, 1.0, 0.88, 1.0)
+
+	if not _attack_fill_style and attack_bar:
+		var base_fill = attack_bar.get_theme_stylebox("fill")
+		if base_fill is StyleBoxFlat:
+			_attack_fill_style = base_fill.duplicate()
 		else:
-			skill_label.text = clean_name
+			_attack_fill_style = StyleBoxFlat.new()
+			_attack_fill_style.bg_color = Color(1.0, 1.0, 0.0, 1.0)
+		attack_bar.add_theme_stylebox_override("fill", _attack_fill_style)
+
+	if _attack_fill_style:
+		_attack_fill_style.bg_color = bar_col
+
+	if skill_label:
+		skill_label.text = clean_name
+		skill_label.add_theme_color_override("font_color", txt_col)
 
 ## 设置当前是否为主集火目标
 func set_focused(focused: bool) -> void:
@@ -404,12 +500,15 @@ func set_focused(focused: bool) -> void:
 func play_spawn_animation() -> void:
 	is_dying = false
 	is_breathing_enabled = true
+	if _status_material:
+		_status_material.set_shader_parameter("dissolve_amount", 0.0)
+		_status_material.set_shader_parameter("flash_amount", 0.0)
 	if attack_bar: attack_bar.visible = true
 	modulate.a = 0.0
 	var tw = create_tween().bind_node(self)
 	tw.tween_property(self, "modulate:a", 1.0, 0.25).set_ease(Tween.EASE_OUT)
 
-## 死亡灰度消散动效
+## 死亡恶魔消融消散动效 (边缘火烬消融 + 缩放坠落)
 func play_death_animation(callback: Callable = Callable()) -> void:
 	if is_dying: return
 	is_dying = true
@@ -419,11 +518,19 @@ func play_death_animation(callback: Callable = Callable()) -> void:
 	is_focused = false
 	
 	var tw = create_tween().bind_node(self)
-	# 灰度褪色 + 缩放缩小 + 渐隐
-	tw.parallel().tween_property(self, "modulate", Color(0.2, 0.2, 0.2, 0.0), 0.25).set_ease(Tween.EASE_IN)
+	if _status_material:
+		_status_material.set_shader_parameter("dissolve_amount", 0.0)
+		tw.parallel().tween_method(_set_dissolve_amount, 0.0, 1.0, 0.32).set_ease(Tween.EASE_IN)
+	else:
+		tw.parallel().tween_property(self, "modulate", Color(0.2, 0.2, 0.2, 0.0), 0.25).set_ease(Tween.EASE_IN)
+		
 	if sprite:
-		tw.parallel().tween_property(sprite, "scale", Vector2(base_scale * 0.7, base_scale * 0.7), 0.25).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(sprite, "scale", Vector2(base_scale * 0.82, base_scale * 0.82), 0.32).set_ease(Tween.EASE_IN)
 	tw.tween_callback(_on_death_animation_finished.bind(callback))
+
+func _set_dissolve_amount(v: float) -> void:
+	if _status_material:
+		_status_material.set_shader_parameter("dissolve_amount", v)
 
 func _on_death_animation_finished(cb: Callable) -> void:
 	if cb.is_valid():

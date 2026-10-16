@@ -83,5 +83,40 @@ func _ready():
 	assert(hit_box[0] == 10, "Lightning Bolt Javelin should trigger on_hit on arrival")
 	print("PASS: Amazon Lightning Javelin FX verified!")
 	
+	# 测试暴风雪 (Blizzard: 天降多重冰棱轰击)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(200, 200), "blizzard", "冰", on_hit, true)
+	await get_tree().create_timer(0.25).timeout
+	assert(hit_box[0] == 11, "Blizzard Sky Fall should trigger on_hit on ground impact")
+	print("PASS: Blizzard Sky Fall Multi-shard FX verified!")
+
+	# 测试霜之新星 (Frost Nova: 360度环形扩散冲击)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(250, 250), "frost_nova", "冰", on_hit, false)
+	assert(hit_box[0] == 12, "Frost Nova Radial Ring should trigger on_hit")
+	print("PASS: Frost Nova Radial Ring Burst FX verified!")
+
+	# 测试格挡护盾碎裂粒子派发
+	fx_mgr.play_shield_block(Vector2(200, 200))
+	print("PASS: Shield Block Break Particle verified!")
+
+	# 测试雷暴术 (Thunder Storm: 垂直折线天雷坠击 + 瞬态命中)
+	fx_mgr.play_combat_fx(Vector2(100, 100), Vector2(240, 240), "thunder_storm", "电", on_hit, true)
+	await get_tree().create_timer(0.1).timeout
+	assert(hit_box[0] == 13, "Thunder Storm Vertical Thunderbolt should trigger on_hit on lightning strike")
+	print("PASS: Sorceress Thunder Storm Vertical Lightning FX verified!")
+
+	# 3. 测试怪物节点状态着色器 (Monster Composite Shader)
+	var mon_scene = preload("res://scenes/afk/components/monster_display.tscn")
+	var mon = mon_scene.instantiate()
+	add_child(mon)
+	assert(mon._status_material != null, "MonsterDisplay should initialize _status_material")
+	mon.play_hit_reaction(true)
+	var flash_val = mon._status_material.get_shader_parameter("flash_amount")
+	assert(flash_val > 0.5, "play_hit_reaction should drive flash_amount shader parameter")
+	mon.set_dot_state(true, true)
+	assert(mon._status_material.get_shader_parameter("poison_amount") > 0.0, "Poison amount should be active")
+	assert(mon._status_material.get_shader_parameter("freeze_amount") > 0.0, "Freeze amount should be active")
+	mon.play_death_animation()
+	print("PASS: MonsterDisplay Composite Shader (Flash + Freeze + Poison + Dissolve) verified successfully!")
+
 	print("=== ALL COMBAT FX & TIMING TESTS PASSED! ===")
 	get_tree().quit(0)

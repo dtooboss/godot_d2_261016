@@ -47,6 +47,15 @@ const CARD_SCENE = preload("res://scenes/lobby/character_card.tscn")
 @onready var btn_confirm_delete: Button = %BtnConfirmDelete
 @onready var btn_cancel_delete: Button = %BtnCancelDelete
 
+# 版本更新模态弹窗相关节点
+@onready var update_modal: Control = %UpdateModal
+@onready var update_version_label: Label = %UpdateVersionLabel
+@onready var update_notice_text: RichTextLabel = %UpdateNoticeText
+@onready var update_status_label: Label = %UpdateStatusLabel
+@onready var btn_download_update: Button = %BtnDownloadUpdate
+@onready var btn_copy_url: Button = %BtnCopyUrl
+@onready var btn_close_update: Button = %BtnCloseUpdate
+
 const HERO_CLASSES = ["ama", "asn", "nec", "bar", "pal", "sor", "dru"]
 const FEMALE_CLASSES = ["ama", "asn", "sor"]
 
@@ -55,6 +64,9 @@ var card_instances: Array = []
 var selected_create_class: String = "sor"
 var selected_create_gender: String = "女性"
 var class_buttons_map: Dictionary = {}
+
+var current_download_url: String = ""
+var is_update_forced: bool = false
 
 func _ready() -> void:
 	# 难度按钮互斥绑定
@@ -67,15 +79,20 @@ func _ready() -> void:
 	btn_back.pressed.connect(_on_back_pressed)
 	btn_create_char.pressed.connect(_open_create_modal)
 
-	# 创建与删除弹窗初始化
+	# 创建、删除与更新弹窗初始化
 	_init_create_character_modal()
 	_init_delete_character_modal()
+	_init_update_modal()
 	
 	# 双向监听服务器角色大厅广播与消息
 	NetworkClient.disconnected_from_server.connect(_on_disconnected)
 	NetworkClient.text_received.connect(_on_text_received)
 	NetworkClient.json_frame_received.connect(_on_json_frame_received)
 	NetworkClient.login_success.connect(_on_character_list_updated)
+	
+	# 若 GameState 已缓存有版本校验信息，立即应用检查
+	if GameState and not GameState.version_info.is_empty():
+		_handle_version_check(GameState.version_info)
 	
 	_populate_character_list()
 
@@ -87,7 +104,7 @@ func _populate_character_list() -> void:
 	
 	var chars = GameState.character_list
 	if chars.is_empty():
-		status_label.text = "暂无角色，请点击上方【+ 创建新英雄】开启庇护之地征途"
+		status_label.text = "暂无角色，请点击上方【+ 创建新英雄】开启避难所世界征途"
 		btn_enter_game.disabled = true
 		btn_delete_char.disabled = true
 		detail_name.text = "暂无英雄"
@@ -100,7 +117,10 @@ func _populate_character_list() -> void:
 		stat_int.text = "0"
 		return
 		
-	btn_enter_game.disabled = false
+	if is_update_forced:
+		btn_enter_game.disabled = true
+	else:
+		btn_enter_game.disabled = false
 	btn_delete_char.disabled = false
 	for i in range(chars.size()):
 		var cdata = chars[i]
@@ -171,6 +191,11 @@ func _set_difficulty(diff: String) -> void:
 	diff_hell.button_pressed = (diff == "hell")
 
 func _on_enter_game_pressed() -> void:
+	if is_update_forced:
+		status_label.text = "客户端版本过低，无法进入世界，请先更新客户端！"
+		update_modal.visible = true
+		return
+		
 	if current_selected_char.is_empty():
 		status_label.text = "请先选择一个角色！"
 		return
@@ -182,7 +207,7 @@ func _on_enter_game_pressed() -> void:
 	if GameState.selected_character is Dictionary:
 		GameState.selected_character["difficulty"] = diff
 	
-	status_label.text = "正在进入庇护之地主城大本营..."
+	status_label.text = "正在进入大本营安全区..."
 	btn_enter_game.disabled = true
 	
 	# 发送暗黑2标准选角进入指令: select_char <char_id> <diff>
@@ -371,6 +396,69 @@ func _on_confirm_delete_pressed() -> void:
 	)
 
 # ----------------------------------------------------
+# 客户端版本更新交互系统
+# ----------------------------------------------------
+func _init_update_modal() -> void:
+	btn_download_update.pressed.connect(_on_download_update_pressed)
+	btn_copy_url.pressed.connect(_on_copy_url_pressed)
+	btn_close_update.pressed.connect(_on_close_update_pressed)
+
+func _handle_version_check(vcheck: Dictionary) -> void:
+	if vcheck.is_empty():
+		return
+		
+	var need_update = vcheck.get("need_update", 0) != 0
+	var is_forced = vcheck.get("is_forced", 0) != 0
+	var client_ver = str(vcheck.get("client_version", GameState.CLIENT_VERSION))
+	var latest_ver = str(vcheck.get("latest_version", client_ver))
+	var min_ver = str(vcheck.get("min_version", client_ver))
+	var download_url = str(vcheck.get("download_url", ""))
+	var notice = str(vcheck.get("notice", ""))
+	
+	current_download_url = download_url
+	is_update_forced = is_forced
+	
+	if need_update or is_forced:
+		update_version_label.text = "当前版本: %s   |   最新版本: %s (最低要求: %s)" % [client_ver, latest_ver, min_ver]
+		if not notice.is_empty():
+			update_notice_text.text = notice
+		else:
+			update_notice_text.text = "发现新版本，请下载最新客户端以获得更好的游戏体验。"
+			
+		if is_forced:
+			update_status_label.text = "【强制更新】当前版本过低，无法进入游戏世界，请更新至最新版！"
+			update_status_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35))
+			btn_close_update.visible = false
+			btn_enter_game.disabled = true
+			status_label.text = "客户端版本过低 (当前: %s, 要求: %s)，请更新后进入游戏！" % [client_ver, min_ver]
+		else:
+			update_status_label.text = "建议更新至最新版本以体验全新内容与优化。"
+			update_status_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+			btn_close_update.visible = true
+			
+		update_modal.visible = true
+
+func _on_download_update_pressed() -> void:
+	if not current_download_url.is_empty():
+		OS.shell_open(current_download_url)
+		update_status_label.text = "已在浏览器中打开下载页面..."
+	else:
+		update_status_label.text = "未配置下载地址，请联系管理员获取最新客户端。"
+
+func _on_copy_url_pressed() -> void:
+	if not current_download_url.is_empty():
+		DisplayServer.clipboard_set(current_download_url)
+		update_status_label.text = "下载链接已成功复制到剪贴板！"
+	else:
+		update_status_label.text = "暂无下载链接可复制。"
+
+func _on_close_update_pressed() -> void:
+	if is_update_forced:
+		update_status_label.text = "当前版本为强制更新，必须更新后方可进入世界！"
+		return
+	update_modal.visible = false
+
+# ----------------------------------------------------
 # 协议帧监听
 # ----------------------------------------------------
 var has_entered_world: bool = false
@@ -382,7 +470,14 @@ func _on_json_frame_received(type: String, data: Variant) -> void:
 		var chars = data.get("characters", data.get("character_list", []))
 		if chars is Array:
 			_on_character_list_updated(chars)
-			return
+		if data.has("version_check") and data["version_check"] is Dictionary:
+			_handle_version_check(data["version_check"])
+		return
+
+	# 处理独立版本校验帧
+	if type == "version_check" and data is Dictionary:
+		_handle_version_check(data)
+		return
 
 	# 2. 收到创建或选角错误反馈
 	if type == "error" and data is Dictionary:

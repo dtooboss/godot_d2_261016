@@ -74,6 +74,21 @@ theme_override_font_sizes/font_size = 12
 text = "可用技能点: 0"
 vertical_alignment = 1
 
+[node name="LblSkillRespecCount" type="Label" parent="MainVBox/TitleBar/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+text = "洗点: 0次"
+vertical_alignment = 1
+
+[node name="BtnBuySkillRespec" type="Button" parent="MainVBox/TitleBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(46, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+购买"
+
 [node name="BtnReset" type="Button" parent="MainVBox/TitleBar/HBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(70, 22)

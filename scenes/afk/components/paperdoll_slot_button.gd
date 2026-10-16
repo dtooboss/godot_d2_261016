@@ -156,6 +156,19 @@ func _get_drag_data(_at_position: Vector2) -> Variant:
 		"item_data": current_item_data
 	}
 
+const SLOT_MAP = {
+	"helmet": ["head", "helmet"],
+	"armor": ["armor", "cloth"],
+	"pants": ["waist", "belt"],
+	"gloves": ["gloves", "hands"],
+	"boots": ["boots", "feet"],
+	"necklace": ["neck", "necklace", "amulet"],
+	"ring1": ["finger", "ring"],
+	"ring2": ["finger", "ring"],
+	"main_hand": ["weapon", "sword", "axe", "dagger", "staff", "bow", "crossbow", "polearm", "mace", "wand", "spear", "claw", "club"],
+	"off_hand": ["shield", "offhand", "off_hand", "weapon", "sword", "axe", "dagger", "mace", "claw"]
+}
+
 func is_item_compatible(item_data: Dictionary) -> bool:
 	if item_data.is_empty() or slot_key.is_empty():
 		return false
@@ -163,12 +176,22 @@ func is_item_compatible(item_data: Dictionary) -> bool:
 	var d2_type = str(item_data.get("d2_type", ""))
 	var icon_p = str(item_data.get("icon", "")).to_lower()
 	
-	# 护符/药水/宝石/符文/卷轴不可穿戴到装备槽位
+	# 护符/消耗品/药水/宝石/符文/卷轴不可穿戴到装备槽位
+	if AnsiHelper.to_safe_int(item_data.get("is_consumable"), 0) == 1:
+		return false
 	if bool(item_data.get("is_charm", false)) or AnsiHelper.to_safe_int(item_data.get("is_charm"), 0) == 1:
 		return false
 	if AnsiHelper.to_safe_int(item_data.get("is_rune"), 0) == 1 or AnsiHelper.to_safe_int(item_data.get("is_gem"), 0) == 1:
 		return false
-	if "卷轴" in iname or "药水" in iname or "药剂" in iname or "精粹" in iname:
+
+	# 1. 优先使用服务端下发的权威 slot 元数据判定
+	var it_slot = str(item_data.get("slot", "")).to_lower()
+	if not it_slot.is_empty() and SLOT_MAP.has(slot_key):
+		if it_slot in SLOT_MAP[slot_key]:
+			return true
+
+	# 2. 兜底容错判定 (兼容未下发 slot 的遗留数据)
+	if d2_type in ["potion", "scroll", "rune", "gem", "consumable"]:
 		return false
 
 	match slot_key:

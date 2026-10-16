@@ -9,7 +9,7 @@ func _ready() -> void:
 	var vp_size = Vector2(800, 600)
 	
 	# 1. 真实鲜血荒地地图背景
-	var bg_tex = load("res://mods/vanilla/assets/worlds/1/1.png")
+	var bg_tex = load("res://mods/vanilla/assets/worlds/1/1.webp")
 	if bg_tex:
 		var bg_sp = Sprite2D.new()
 		bg_sp.texture = bg_tex

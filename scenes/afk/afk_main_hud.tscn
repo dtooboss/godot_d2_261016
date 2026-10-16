@@ -1,7 +1,7 @@
 [gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scenes/afk/afk_main_hud.gd" id="1"]
-[ext_resource type="Texture2D" path="res://mods/vanilla/assets/worlds/1/1.png" id="2"]
+[ext_resource type="Texture2D" path="res://mods/vanilla/assets/worlds/1/1.webp" id="2"]
 [ext_resource type="StyleBox" path="res://assets/ui-resource/danger.tres" id="3"]
 [ext_resource type="StyleBox" path="res://assets/ui-resource/panel_background_light.tres" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/afk/components/monster_display.tscn" id="5"]

@@ -59,7 +59,7 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "拾取设置(P)"
+text = "分解设置(P)"
 
 [node name="BtnEnhance" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
@@ -75,13 +75,6 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "随身商店(S)"
 
-[node name="BtnResetPoints" type="Button" parent="Margin/VBox/Grid"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(68, 28)
-layout_mode = 2
-theme_override_font_sizes/font_size = 11
-text = "属性点重置"
-
 [node name="BtnSkills" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
@@ -96,16 +89,16 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "合成"
 
-[node name="BottomHBox" type="HBoxContainer" parent="Margin/VBox"]
-layout_mode = 2
-theme_override_constants/separation = 4
-
-[node name="BtnSmelt" type="Button" parent="Margin/VBox/BottomHBox"]
+[node name="BtnSmelt" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "熔炼"
+
+[node name="BottomHBox" type="HBoxContainer" parent="Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
 
 [node name="Spacer" type="Control" parent="Margin/VBox/BottomHBox"]
 layout_mode = 2

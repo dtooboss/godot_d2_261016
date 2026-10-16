@@ -235,15 +235,18 @@ func update_progress(user_max_stage: int) -> void:
 
 	var cur_max = max(0, user_max_stage)
 	
-	var player_diff = "normal"
+	var player_diff = GameState.selected_difficulty
+	if player_diff.is_empty() and GameState.selected_character:
+		player_diff = str(GameState.selected_character.get("difficulty", "normal")).to_lower()
+	if player_diff == "nightmare": player_diff = "nm"
+	
 	var unlocked_diff_level = 1
 	if GameState.selected_character and not GameState.selected_character.is_empty():
-		player_diff = str(GameState.selected_character.get("difficulty", "normal")).to_lower()
-		unlocked_diff_level = int(GameState.selected_character.get("d2_diff_unlocked", GameState.selected_character.get("d2_unlocked_diff", 1)))
+		unlocked_diff_level = int(GameState.selected_character.get("unlocked_diff", GameState.selected_character.get("d2_diff_unlocked", GameState.selected_character.get("d2_unlocked_diff", 1))))
 	
 	var cur_diff_level = 1
-	if player_diff in ["nm", "nightmare"]: cur_diff_level = 2
-	elif player_diff in ["hell"]: cur_diff_level = 3
+	if player_diff == "nm": cur_diff_level = 2
+	elif player_diff == "hell": cur_diff_level = 3
 	
 	# 若当前难度低于其已解锁最高难度，低难度站点全开！
 	var is_lower_diff_cleared = (cur_diff_level < unlocked_diff_level)

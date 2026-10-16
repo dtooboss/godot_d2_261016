@@ -30,10 +30,27 @@ var _player_gold_label: Label
 var _grid: GridContainer
 var _hint_label: Label
 
+# 数量选择弹窗组件 (用于药水、符文等叠加物品取出数量选择)
+var _qty_modal: PanelContainer = null
+var _qty_item_name: Label = null
+var _qty_item_icon: TextureRect = null
+var _qty_stock_label: Label = null
+var _qty_slider: HSlider = null
+var _qty_spin: SpinBox = null
+var _btn_qty_1: Button = null
+var _btn_qty_half: Button = null
+var _btn_qty_all: Button = null
+var _btn_qty_confirm: Button = null
+var _btn_qty_cancel: Button = null
+var _pending_withdraw_item: Dictionary = {}
+var _current_withdraw_amount: int = 1
+var _max_withdraw_amount: int = 1
+
 func _ready() -> void:
 	visible = false
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	_build_ui()
+	if not _title_label:
+		_build_ui()
 
 func _build_ui() -> void:
 	# 暗金微雕外框风格 (紧凑外边距，防止垂直越界)
@@ -100,7 +117,10 @@ func _build_ui() -> void:
 		btn_tab.focus_mode = Control.FOCUS_NONE
 		_style_tab_button(btn_tab, false)
 		var t_id = cfg["id"]
-		btn_tab.pressed.connect(func(): action_requested.emit("stash tab %d" % t_id))
+		btn_tab.pressed.connect(func():
+			if _qty_modal: _qty_modal.visible = false
+			action_requested.emit("stash tab %d" % t_id)
+		)
 		_tabs_container.add_child(btn_tab)
 		_tab_buttons.append(btn_tab)
 
@@ -202,6 +222,199 @@ func _build_ui() -> void:
 	_hint_label.add_theme_color_override("font_color", Color(0.65, 0.6, 0.5))
 	vbox.add_child(_hint_label)
 
+	# 6. 数量选择模态弹窗 (用于叠加物品取出，默认隐藏)
+	_build_qty_modal()
+
+## 构建暗黑2风格数量选择弹窗 (用于叠加物品取出，严格防护边界)
+func _build_qty_modal() -> void:
+	_qty_modal = PanelContainer.new()
+	_qty_modal.custom_minimum_size = Vector2(290, 175)
+	
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.04, 0.06, 0.98)
+	sb.border_color = Color(0.9, 0.78, 0.28, 1.0)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(6)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 10.0
+	sb.content_margin_bottom = 10.0
+	_qty_modal.add_theme_stylebox_override("panel", sb)
+	
+	_qty_modal.set_anchors_preset(Control.PRESET_CENTER)
+	_qty_modal.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_qty_modal.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_qty_modal.mouse_filter = Control.MOUSE_FILTER_STOP
+	_qty_modal.visible = false
+	add_child(_qty_modal)
+	
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	_qty_modal.add_child(vbox)
+	
+	var title := Label.new()
+	title.text = "❖ 取出数量 ❖"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.4))
+	title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(title)
+	
+	var item_row := HBoxContainer.new()
+	item_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	item_row.add_theme_constant_override("separation", 10)
+	vbox.add_child(item_row)
+	
+	_qty_item_icon = TextureRect.new()
+	_qty_item_icon.custom_minimum_size = Vector2(36, 36)
+	_qty_item_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_qty_item_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	item_row.add_child(_qty_item_icon)
+	
+	var info_vbox := VBoxContainer.new()
+	info_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	item_row.add_child(info_vbox)
+	
+	_qty_item_name = Label.new()
+	_qty_item_name.add_theme_font_size_override("font_size", 12)
+	info_vbox.add_child(_qty_item_name)
+	
+	_qty_stock_label = Label.new()
+	_qty_stock_label.add_theme_font_size_override("font_size", 11)
+	_qty_stock_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	info_vbox.add_child(_qty_stock_label)
+	
+	# 快捷按钮行 (1, 一半, 全部)
+	var quick_row := HBoxContainer.new()
+	quick_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	quick_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(quick_row)
+	
+	_btn_qty_1 = Button.new()
+	_btn_qty_1.text = " 1 "
+	_btn_qty_1.custom_minimum_size = Vector2(50, 24)
+	_btn_qty_1.focus_mode = Control.FOCUS_NONE
+	_btn_qty_1.pressed.connect(func(): _set_modal_qty(1))
+	quick_row.add_child(_btn_qty_1)
+	
+	_btn_qty_half = Button.new()
+	_btn_qty_half.text = " 一半 "
+	_btn_qty_half.custom_minimum_size = Vector2(60, 24)
+	_btn_qty_half.focus_mode = Control.FOCUS_NONE
+	_btn_qty_half.pressed.connect(func(): _set_modal_qty(max(1, _max_withdraw_amount / 2)))
+	quick_row.add_child(_btn_qty_half)
+	
+	_btn_qty_all = Button.new()
+	_btn_qty_all.text = " 全部 "
+	_btn_qty_all.custom_minimum_size = Vector2(60, 24)
+	_btn_qty_all.focus_mode = Control.FOCUS_NONE
+	_btn_qty_all.pressed.connect(func(): _set_modal_qty(_max_withdraw_amount))
+	quick_row.add_child(_btn_qty_all)
+	
+	# 数量调节行 (- Slider + SpinBox)
+	var adjust_row := HBoxContainer.new()
+	adjust_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	adjust_row.add_theme_constant_override("separation", 6)
+	vbox.add_child(adjust_row)
+	
+	var btn_minus := Button.new()
+	btn_minus.text = " - "
+	btn_minus.custom_minimum_size = Vector2(26, 24)
+	btn_minus.focus_mode = Control.FOCUS_NONE
+	btn_minus.pressed.connect(func(): _set_modal_qty(_current_withdraw_amount - 1))
+	adjust_row.add_child(btn_minus)
+	
+	_qty_slider = HSlider.new()
+	_qty_slider.min_value = 1
+	_qty_slider.max_value = 100
+	_qty_slider.step = 1
+	_qty_slider.custom_minimum_size = Vector2(80, 20)
+	_qty_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_qty_slider.value_changed.connect(func(v): _set_modal_qty(int(v)))
+	adjust_row.add_child(_qty_slider)
+	
+	var btn_plus := Button.new()
+	btn_plus.text = " + "
+	btn_plus.custom_minimum_size = Vector2(26, 24)
+	btn_plus.focus_mode = Control.FOCUS_NONE
+	btn_plus.pressed.connect(func(): _set_modal_qty(_current_withdraw_amount + 1))
+	adjust_row.add_child(btn_plus)
+	
+	_qty_spin = SpinBox.new()
+	_qty_spin.min_value = 1
+	_qty_spin.max_value = 100
+	_qty_spin.step = 1
+	_qty_spin.custom_minimum_size = Vector2(70, 24)
+	_qty_spin.value_changed.connect(func(v): _set_modal_qty(int(v)))
+	adjust_row.add_child(_qty_spin)
+	
+	# 操作按钮行 (确认取出 / 取消)
+	var act_row := HBoxContainer.new()
+	act_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	act_row.add_theme_constant_override("separation", 16)
+	vbox.add_child(act_row)
+	
+	_btn_qty_confirm = Button.new()
+	_btn_qty_confirm.text = " 确认取出 "
+	_btn_qty_confirm.custom_minimum_size = Vector2(90, 28)
+	_btn_qty_confirm.focus_mode = Control.FOCUS_NONE
+	_btn_qty_confirm.pressed.connect(_on_qty_confirm_pressed)
+	act_row.add_child(_btn_qty_confirm)
+	
+	_btn_qty_cancel = Button.new()
+	_btn_qty_cancel.text = " 取消 "
+	_btn_qty_cancel.custom_minimum_size = Vector2(70, 28)
+	_btn_qty_cancel.focus_mode = Control.FOCUS_NONE
+	_btn_qty_cancel.pressed.connect(func(): _qty_modal.visible = false)
+	act_row.add_child(_btn_qty_cancel)
+
+func _set_modal_qty(val: int) -> void:
+	_current_withdraw_amount = clamp(val, 1, _max_withdraw_amount)
+	if _qty_slider and int(_qty_slider.value) != _current_withdraw_amount:
+		_qty_slider.value = _current_withdraw_amount
+	if _qty_spin and int(_qty_spin.value) != _current_withdraw_amount:
+		_qty_spin.value = _current_withdraw_amount
+
+func _show_amount_modal(item_data: Dictionary, total_amt: int) -> void:
+	_pending_withdraw_item = item_data
+	_max_withdraw_amount = max(1, total_amt)
+	_current_withdraw_amount = _max_withdraw_amount
+	
+	var q = str(item_data.get("quality", "normal")).to_lower()
+	var col_hex = _get_quality_color_hex(q)
+	var col = Color.from_string(col_hex, Color(0.85, 0.85, 0.85))
+	_qty_item_name.text = AnsiHelper.to_plain_text(str(item_data.get("name", "物品")))
+	_qty_item_name.add_theme_color_override("font_color", col)
+	
+	var tex = item_data.get("icon_texture")
+	if tex is Texture2D:
+		_qty_item_icon.texture = tex
+	else:
+		var icon_path = str(item_data.get("icon", ""))
+		_qty_item_icon.texture = _resolve_item_icon(_qty_item_name.text, icon_path)
+		
+	_qty_stock_label.text = "仓内存量: %d" % _max_withdraw_amount
+	if _qty_slider:
+		_qty_slider.min_value = 1
+		_qty_slider.max_value = _max_withdraw_amount
+	if _qty_spin:
+		_qty_spin.min_value = 1
+		_qty_spin.max_value = _max_withdraw_amount
+		
+	_set_modal_qty(_max_withdraw_amount)
+	_qty_modal.visible = true
+
+func _on_qty_confirm_pressed() -> void:
+	if _pending_withdraw_item.is_empty():
+		_qty_modal.visible = false
+		return
+	var uuid = str(_pending_withdraw_item.get("uuid", ""))
+	if uuid.is_empty():
+		uuid = str(_pending_withdraw_item.get("slot", ""))
+	if not uuid.is_empty():
+		var amt = clamp(_current_withdraw_amount, 1, _max_withdraw_amount)
+		action_requested.emit("stash take %d %s %d" % [current_tab, uuid, amt])
+	_qty_modal.visible = false
+
 func _add_gold_btn(parent: Control, label_text: String, is_deposit: bool, amount: int) -> void:
 	var btn := Button.new()
 	btn.text = label_text
@@ -257,6 +470,10 @@ func _style_tab_button(btn: Button, is_active: bool) -> void:
 
 # ========== 服务端 gstash 状态帧渲染 (纯后端权威驱动) ==========
 func render_gstash_data(data: Dictionary) -> void:
+	if not _title_label:
+		_build_ui()
+	if _qty_modal and _qty_modal.visible:
+		_qty_modal.visible = false
 	var raw_tab = data.get("cur_tab")
 	if raw_tab == null and data.has("cur_tab_id"):
 		raw_tab = data["cur_tab_id"]
@@ -308,6 +525,7 @@ func render_gstash_data(data: Dictionary) -> void:
 		if btn.has_method("set_slot_amount"): btn.set_slot_amount(0)
 		if btn.has_method("set_slot_quality"): btn.set_slot_quality("")
 		if btn.has_method("set_slot_sockets"): btn.set_slot_sockets(0, [])
+		if btn.has_method("set_slot_unmet"): btn.set_slot_unmet(false)
 
 	# 填充物品
 	var items = data.get("items", [])
@@ -333,12 +551,16 @@ func render_gstash_data(data: Dictionary) -> void:
 				"type": quality_s.capitalize(),
 				"color": _get_quality_color_hex(quality_s),
 				"desc": desc_p,
-				"cmd": "stash click %d %d" % [current_tab, slot_idx],
+				"cmd": "stash look %d %d" % [current_tab, slot_idx],
 				"file_id": str(it.get("uuid", it.get("file_id", ""))),
 				"uuid": str(it.get("uuid", "")),
 				"amount": AnsiHelper.to_safe_int(it.get("amount"), 1),
 				"sockets": AnsiHelper.to_safe_int(it.get("sockets"), 0),
 				"inlays": item_dict.get("inlay", []) if item_dict is Dictionary and item_dict.get("inlay") is Array else [],
+				"slot": str(it.get("slot", item_dict.get("slot", ""))),
+				"d2_type": str(it.get("d2_type", item_dict.get("d2_type", ""))),
+				"is_consumable": AnsiHelper.to_safe_int(it.get("is_consumable", item_dict.get("is_consumable", 0)), 0),
+				"unmet": AnsiHelper.to_safe_int(it.get("unmet", 0), 0),
 				"item_data": item_dict
 			}
 
@@ -354,6 +576,8 @@ func render_gstash_data(data: Dictionary) -> void:
 				slots[slot_idx].set_slot_quality(item_data["quality"])
 			if slots[slot_idx].has_method("set_slot_sockets"):
 				slots[slot_idx].set_slot_sockets(item_data["sockets"], item_data["inlays"])
+			if slots[slot_idx].has_method("set_slot_unmet"):
+				slots[slot_idx].set_slot_unmet(bool(item_data["unmet"]))
 
 			items_map[slot_idx] = item_data
 
@@ -432,17 +656,18 @@ func _on_slot_unhovered() -> void:
 # ========== 格子右键 / 左键取出 ==========
 func _on_slot_gui_input(event: InputEvent, slot_idx: int) -> void:
 	if event is InputEventMouseButton and event.pressed:
-		# 右键点击储物箱物品：直接取出到随身背包！
-		if event.button_index == MOUSE_BUTTON_RIGHT and items_map.has(slot_idx):
-			var it = items_map[slot_idx]
-			var uuid = str(it.get("uuid", ""))
+		if (event.button_index == MOUSE_BUTTON_RIGHT or event.button_index == MOUSE_BUTTON_LEFT) and items_map.has(slot_idx):
+			var it: Dictionary = items_map[slot_idx]
+			var total_amt: int = AnsiHelper.to_safe_int(it.get("amount", 1), 1)
+			var uuid: String = str(it.get("uuid", ""))
 			if uuid.is_empty(): uuid = str(slot_idx)
-			action_requested.emit("stash take %d %s" % [current_tab, uuid])
-		# 左键点击亦提供取出支持
-		elif event.button_index == MOUSE_BUTTON_LEFT and items_map.has(slot_idx) and not event.shift_pressed:
-			var it = items_map[slot_idx]
-			var uuid = str(it.get("uuid", ""))
-			if uuid.is_empty(): uuid = str(slot_idx)
+
+			# 叠加物品数量 > 1 时，弹出暗黑2风格数量选择弹窗 (Shift 点击保留直接取出)
+			if total_amt > 1 and not event.shift_pressed:
+				_show_amount_modal(it, total_amt)
+				return
+
+			# 单件物品或按住 Shift 直接全额取出
 			action_requested.emit("stash take %d %s" % [current_tab, uuid])
 
 # ========== 拖拽接口: 接收随身背包拖入物品 (source = "main_bag") ==========
@@ -495,9 +720,14 @@ func _input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
+		if _qty_modal and _qty_modal.visible:
+			_qty_modal.visible = false
+			return
 		_close()
 
 func _close() -> void:
+	if _qty_modal:
+		_qty_modal.visible = false
 	visible = false
 	item_unhovered.emit()
 	closed.emit()

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8y9c1p3trade"]
+
+[ext_resource type="Script" path="res://scripts/test_trade_points_and_unid_ui.gd" id="1_trade"]
+
+[node name="TestTradePointsAndUnidUI" type="Node2D"]
+script = ExtResource("1_trade")

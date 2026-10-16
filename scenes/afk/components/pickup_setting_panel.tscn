@@ -72,7 +72,7 @@ layout_mode = 2
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 13
-text = "自动熔炼 / 过滤设置"
+text = "自动分解 / 过滤设置"
 
 [node name="BtnClose" type="Button" parent="Panel/VBox/TitleBar/HBox"]
 unique_name_in_owner = true
@@ -93,7 +93,7 @@ theme_override_constants/margin_right = 12
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.8, 0.25, 1)
 theme_override_font_sizes/font_size = 11
-text = "⚡ 勾选的项目击杀时自动熔炼为金币/魔尘；未勾选的项目拾取入包"
+text = "⚡ 勾选的项目击杀时自动分解为金币/魔尘；未勾选的项目拾取入包"
 horizontal_alignment = 2
 
 [node name="TabMargin" type="MarginContainer" parent="Panel/VBox"]

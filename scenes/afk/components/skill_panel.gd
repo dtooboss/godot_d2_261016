@@ -8,6 +8,7 @@ class_name AFK_SkillPanel
 
 signal skill_learn_requested(skill_code: String)
 signal skill_reset_requested()
+signal skill_buy_respec_requested()
 signal skill_set_binding_requested(skill_code: String, slot_type: String)
 
 static func _safe_int(val: Variant, default_val: int = 0) -> int:
@@ -16,6 +17,8 @@ static func _safe_int(val: Variant, default_val: int = 0) -> int:
 @onready var title_label: Label = %TitleLabel
 @onready var class_avatar: TextureRect = %ClassAvatar
 @onready var points_label: Label = %PointsLabel
+@onready var lbl_skill_respec_count: Label = %LblSkillRespecCount
+@onready var btn_buy_skill_respec: Button = %BtnBuySkillRespec
 @onready var btn_reset: Button = %BtnReset
 @onready var btn_close: Button = %BtnClose
 @onready var tab_bar: HBoxContainer = %TabBar
@@ -48,6 +51,8 @@ var _current_page: int = 1
 var _selected_skill_code: String = ""
 var _node_widgets: Dictionary = {} # code -> Control
 var _node_selection_boxes: Dictionary = {} # code -> Panel
+var _skill_respecs: int = 0
+var _respec_price: int = 25000
 
 # 网格坐标常数 (6 行 3 列)
 const GRID_START_X = 65.0
@@ -62,6 +67,8 @@ func _ready() -> void:
 		btn_close.pressed.connect(close)
 	if btn_reset:
 		btn_reset.pressed.connect(_on_reset_pressed)
+	if btn_buy_skill_respec:
+		btn_buy_skill_respec.pressed.connect(_on_buy_respec_pressed)
 	if btn_set_main:
 		btn_set_main.pressed.connect(func():
 			if not _selected_skill_code.is_empty():
@@ -100,6 +107,17 @@ func render_gskills_data(data: Dictionary) -> void:
 			points_label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 		else:
 			points_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+
+	_skill_respecs = _safe_int(data.get("skill_respecs", data.get("free_respecs", 0)), 0)
+	_respec_price = _safe_int(data.get("respec_price", 25000), 25000)
+	if lbl_skill_respec_count:
+		lbl_skill_respec_count.text = "洗点: %d次" % _skill_respecs
+		if _skill_respecs > 0:
+			lbl_skill_respec_count.modulate = Color(0.4, 0.95, 0.4, 1.0)
+		else:
+			lbl_skill_respec_count.modulate = Color(0.7, 0.7, 0.7, 0.8)
+	if btn_buy_skill_respec:
+		btn_buy_skill_respec.tooltip_text = "花费 %d 金币购买 1 次技能洗点机会" % _respec_price
 			
 	if class_avatar:
 		class_avatar.texture = _get_class_icon(_current_class)
@@ -550,25 +568,34 @@ func _render_skill_details(sk_code: String) -> void:
 
 		var tags: Array[String] = []
 
-		# 1. 基础驱动门类
+		# 1. 基础驱动门类 (严格按技能树页签 page 划分战吼/光环/战斗技能，杜绝跨分类乌龙)
+		var sk_cls = str(sk.get("class", ""))
+		var sk_page = _safe_int(sk.get("page"), 1)
+		var s_code = sk_code.to_lower()
+
 		if is_passive:
 			tags.append("被动技能")
 		elif target_type == "buff":
-			var sk_cls = str(sk.get("class", ""))
-			if sk_cls == "pal":
+			if sk_cls == "pal" and sk_page in [2, 3]:
 				tags.append("增益光环")
-			elif sk_cls == "bar":
+			elif sk_cls == "bar" and sk_page == 3:
 				tags.append("增益战吼")
 			else:
 				tags.append("增益状态")
 		elif target_type == "curse":
-			tags.append("诅咒弱化")
+			if sk_cls == "bar" and sk_page == 3:
+				tags.append("战吼削弱")
+			else:
+				tags.append("诅咒弱化")
 		elif target_type == "summon":
 			tags.append("召唤法术")
 		elif is_spell:
 			tags.append("法术技能")
 		else:
-			tags.append("战斗技能")
+			if s_code == "leap":
+				tags.append("位移技能")
+			else:
+				tags.append("战斗技能")
 
 		# 2. 作用范围与打击段数 (仅对主动输出与控制技能呈现)
 		if not is_passive and target_type not in ["buff", "summon", "curse"]:
@@ -737,10 +764,39 @@ func _resolve_skill_display_name(sk_code: String) -> String:
 		return str(sk.get("name", sk_code))
 	return sk_code
 
+func _on_buy_respec_pressed() -> void:
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "购买技能洗点"
+	dlg.dialog_text = "确定要花费 %d 金币购买 1 次【技能洗点机会】吗？" % _respec_price
+	dlg.ok_button_text = "确认购买"
+	dlg.cancel_button_text = "取消"
+	add_child(dlg)
+	dlg.confirmed.connect(func():
+		skill_buy_respec_requested.emit()
+		dlg.queue_free()
+	)
+	dlg.canceled.connect(func(): dlg.queue_free())
+	dlg.popup_centered()
+
 func _on_reset_pressed() -> void:
+	if _skill_respecs <= 0:
+		var dlg = ConfirmationDialog.new()
+		dlg.title = "技能洗点机会不足"
+		dlg.dialog_text = "当前技能洗点机会不足！\n是否花费 %d 金币购买 1 次技能洗点机会？" % _respec_price
+		dlg.ok_button_text = "前往购买"
+		dlg.cancel_button_text = "取消"
+		add_child(dlg)
+		dlg.confirmed.connect(func():
+			_on_buy_respec_pressed()
+			dlg.queue_free()
+		)
+		dlg.canceled.connect(func(): dlg.queue_free())
+		dlg.popup_centered()
+		return
+
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "重置技能点"
-	dlg.dialog_text = "确定要免费重置全部暗黑技能点吗？\n已投入的所有技能点将全额返还，不受任何次数限制！"
+	dlg.dialog_text = "确定要消耗 1 次技能洗点机会重置全部技能点吗？\n已分配的所有技能点将 100%% 全额返还。（当前剩余: %d 次）" % _skill_respecs
 	dlg.ok_button_text = "确认重置"
 	dlg.cancel_button_text = "取消"
 	add_child(dlg)

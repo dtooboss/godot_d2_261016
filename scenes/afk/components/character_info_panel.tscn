@@ -271,13 +271,13 @@ vertical_icon_alignment = 1
 expand_icon = true
 
 [node name="PointsHBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
-custom_minimum_size = Vector2(0, 20)
+custom_minimum_size = Vector2(0, 18)
 layout_mode = 2
 
 [node name="PointsTitle" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PointsHBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "剩余点数"
+text = "未分配属性点"
 
 [node name="PointsLabel" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/PointsHBox"]
 unique_name_in_owner = true
@@ -287,6 +287,34 @@ theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_font_sizes/font_size = 12
 text = "0"
 horizontal_alignment = 2
+
+[node name="RespecHBox" type="HBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
+custom_minimum_size = Vector2(0, 22)
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BtnResetStats" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/RespecHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(62, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "属性重置"
+
+[node name="LblRespecCount" type="Label" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/RespecHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 11
+text = "洗点: 0次"
+horizontal_alignment = 1
+
+[node name="BtnBuyRespec" type="Button" parent="MainHBox/LeftCard/LeftMargin/LeftVBox/RespecHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(46, 22)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "+购买"
 
 [node name="AttributesBox" type="VBoxContainer" parent="MainHBox/LeftCard/LeftMargin/LeftVBox"]
 layout_mode = 2

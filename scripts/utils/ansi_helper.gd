@@ -325,8 +325,9 @@ static func load_item_texture(raw_path: String) -> Texture2D:
 			"res://assets/items/misc/body_part/" + mapped_name + ".png"
 		]
 		for qp in q_paths:
-			if ResourceLoader.exists(qp):
-				return load(qp)
+			var q_tex = load_texture_smart(qp)
+			if q_tex:
+				return q_tex
 	
 	# 3. 构造直接尝试候选列表
 	var candidates: Array[String] = [
@@ -337,24 +338,43 @@ static func load_item_texture(raw_path: String) -> Texture2D:
 	]
 	
 	for cand in candidates:
-		if ResourceLoader.exists(cand):
-			return load(cand)
+		var c_tex = load_texture_smart(cand)
+		if c_tex:
+			return c_tex
 			
 	# 4. 若直连未命中，进行智能词根/文件名索引
 	_init_item_cache_if_needed()
 	var base_name = clean.get_file().to_lower()
-	var base_stem = base_name.replace(".lowend.png", "").replace(".png", "")
+	var base_stem = base_name.replace(".lowend.png", "").replace(".png", "").replace(".lowend.webp", "").replace(".webp", "")
 	
 	if _item_path_cache.has(base_name):
 		var target_res = _item_path_cache[base_name]
-		if ResourceLoader.exists(target_res):
-			return load(target_res)
+		var t_tex = load_texture_smart(target_res)
+		if t_tex:
+			return t_tex
 			
 	if _item_path_cache.has(base_stem):
 		var target_res = _item_path_cache[base_stem]
-		if ResourceLoader.exists(target_res):
-			return load(target_res)
+		var t_tex = load_texture_smart(target_res)
+		if t_tex:
+			return t_tex
 			
+	return null
+
+## 智能透明贴图适配器（拦截 .png 自动命中 .webp，反之亦然，后端 LPC 零感知）
+static func load_texture_smart(path: String) -> Texture2D:
+	if path.is_empty():
+		return null
+	if ResourceLoader.exists(path):
+		return load(path)
+	if path.ends_with(".png"):
+		var webp_path = path.trim_suffix(".png") + ".webp"
+		if ResourceLoader.exists(webp_path):
+			return load(webp_path)
+	elif path.ends_with(".webp"):
+		var png_path = path.trim_suffix(".webp") + ".png"
+		if ResourceLoader.exists(png_path):
+			return load(png_path)
 	return null
 
 ## 递归扫描本地 res://assets/items 构建索引字典
@@ -373,11 +393,11 @@ static func _scan_dir_for_cache(dir_path: String) -> void:
 	while file_name != "":
 		if dir.current_is_dir() and not file_name.begins_with("."):
 			_scan_dir_for_cache(dir_path + "/" + file_name)
-		elif file_name.ends_with(".png"):
+		elif file_name.ends_with(".png") or file_name.ends_with(".webp"):
 			var full_res_path = dir_path + "/" + file_name
 			var f_lower = file_name.to_lower()
 			_item_path_cache[f_lower] = full_res_path
-			var stem = f_lower.replace(".lowend.png", "").replace(".png", "")
+			var stem = f_lower.replace(".lowend.png", "").replace(".png", "").replace(".lowend.webp", "").replace(".webp", "")
 			if not _item_path_cache.has(stem):
 				_item_path_cache[stem] = full_res_path
 		file_name = dir.get_next()

@@ -51,7 +51,7 @@ func _build_ui() -> void:
 	vbox.add_child(title_box)
 
 	var title := Label.new()
-	title.text = "◆ 赫拉迪克方块 ◆"
+	title.text = "◆ 秘法魔盒 ◆"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 15)

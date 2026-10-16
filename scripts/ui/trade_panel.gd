@@ -17,6 +17,7 @@ var my_slot_buttons: Array[Button] = []
 var partner_slot_buttons: Array[Button] = []
 var lbl_my_status: RichTextLabel
 var lbl_partner_status: RichTextLabel
+var lbl_cost_info: RichTextLabel
 var btn_confirm: Button
 var btn_cancel: Button
 var btn_close: Button
@@ -27,6 +28,11 @@ var my_trade_items: Array = []
 var partner_trade_items: Array = []
 var is_my_confirmed: bool = false
 var is_partner_confirmed: bool = false
+var is_cross_passport: bool = true
+var my_trade_points: int = 0
+var partner_trade_points: int = 0
+var inbound_summary: Dictionary = {}
+var outbound_summary: Dictionary = {}
 
 # 数量选择弹窗组件 (用于符文、药水等叠加物品拆分)
 var _qty_modal: PanelContainer = null
@@ -55,7 +61,7 @@ const QUALITY_COLORS = {
 }
 
 func _ready() -> void:
-	custom_minimum_size = Vector2(560, 430)
+	custom_minimum_size = Vector2(560, 455)
 	_build_ui()
 	visible = false
 
@@ -200,6 +206,27 @@ func _build_ui() -> void:
 	lbl_my_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_my_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	status_hbox.add_child(lbl_my_status)
+
+	# 交易接收点数账单核算面板 (暗黑古典暗红微光边框背景)
+	var cost_panel = PanelContainer.new()
+	var cp_sb = StyleBoxFlat.new()
+	cp_sb.bg_color = Color(0.04, 0.04, 0.06, 0.9)
+	cp_sb.border_color = Color(0.35, 0.3, 0.2, 0.75)
+	cp_sb.set_border_width_all(1)
+	cp_sb.set_corner_radius_all(4)
+	cp_sb.content_margin_left = 10.0
+	cp_sb.content_margin_right = 10.0
+	cp_sb.content_margin_top = 4.0
+	cp_sb.content_margin_bottom = 4.0
+	cost_panel.add_theme_stylebox_override("panel", cp_sb)
+	bottom_vbox.add_child(cost_panel)
+
+	lbl_cost_info = RichTextLabel.new()
+	lbl_cost_info.bbcode_enabled = true
+	lbl_cost_info.text = "[center][color=#aaaaaa]交易接收点数核算中...[/color][/center]"
+	lbl_cost_info.fit_content = true
+	lbl_cost_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cost_panel.add_child(lbl_cost_info)
 
 	var btn_hbox = HBoxContainer.new()
 	btn_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -423,6 +450,11 @@ func open_trade(partner_id: String, partner_name: String) -> void:
 	partner_trade_items.clear()
 	is_my_confirmed = false
 	is_partner_confirmed = false
+	is_cross_passport = true
+	my_trade_points = 0
+	partner_trade_points = 0
+	inbound_summary.clear()
+	outbound_summary.clear()
 	
 	_refresh_display()
 	visible = true
@@ -436,6 +468,12 @@ func update_trade_sync(data: Dictionary) -> void:
 	partner_trade_items = data.get("partner_items", [])
 	is_my_confirmed = bool(data.get("my_confirmed", false))
 	is_partner_confirmed = bool(data.get("partner_confirmed", false))
+	
+	is_cross_passport = bool(data.get("is_cross_passport", true))
+	my_trade_points = AnsiHelper.to_safe_int(data.get("my_trade_points"), 0)
+	partner_trade_points = AnsiHelper.to_safe_int(data.get("partner_trade_points"), 0)
+	inbound_summary = data.get("inbound_summary", {})
+	outbound_summary = data.get("outbound_summary", {})
 	
 	_refresh_display()
 
@@ -495,6 +533,24 @@ func _create_slot_btn(is_mine: bool, slot_index: int) -> Button:
 	amt_lbl.visible = false
 	slot_btn.add_child(amt_lbl)
 	
+	# 右上角未辨识问号标记
+	var unid_lbl = Label.new()
+	unid_lbl.name = "UnidLabel"
+	unid_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	unid_lbl.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	unid_lbl.offset_left = -16.0
+	unid_lbl.offset_top = 0.0
+	unid_lbl.offset_right = -2.0
+	unid_lbl.offset_bottom = 15.0
+	unid_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	unid_lbl.text = "?"
+	unid_lbl.add_theme_font_size_override("font_size", 12)
+	unid_lbl.add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+	unid_lbl.add_theme_constant_override("outline_size", 2)
+	unid_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+	unid_lbl.visible = false
+	slot_btn.add_child(unid_lbl)
+	
 	# 信号在初始化时固定连接一次，纯数据驱动，无需反复断连
 	slot_btn.mouse_entered.connect(_on_slot_mouse_entered.bind(slot_btn))
 	slot_btn.mouse_exited.connect(_on_slot_mouse_exited)
@@ -546,6 +602,54 @@ func _refresh_display() -> void:
 		btn_confirm.text = "锁定并确认交易"
 		btn_confirm.disabled = false
 
+	_refresh_cost_bar()
+
+## 刷新交易接收点数账单
+func _refresh_cost_bar() -> void:
+	if not lbl_cost_info:
+		return
+		
+	var my_in_cost = AnsiHelper.to_safe_int(inbound_summary.get("total_cost"), 0)
+	var my_unid = AnsiHelper.to_safe_int(inbound_summary.get("unid_count"), 0)
+	var my_id = AnsiHelper.to_safe_int(inbound_summary.get("id_count"), 0)
+	var my_free = AnsiHelper.to_safe_int(inbound_summary.get("free_count"), 0)
+	var can_afford = bool(inbound_summary.get("can_afford", true))
+	var partner_can_afford = bool(outbound_summary.get("partner_can_afford", true))
+	var target_cost = AnsiHelper.to_safe_int(outbound_summary.get("total_cost"), 0)
+
+	var text = ""
+	if not is_cross_passport:
+		text = "[center][color=#66ddff]❖ 同通行证安全转移：0 点 (免扣)[/color] | 接收: %d件 (未鉴定%d, 已鉴定%d, 基础%d)[/center]" % [
+			my_unid + my_id + my_free, my_unid, my_id, my_free
+		]
+	else:
+		if not can_afford:
+			text = "[center][color=#ff4444]⚠ 接收点数不足！需消耗 %d 点，你当前仅有 %d 点 (未鉴定x%d, 已鉴定x%d, 基础x%d)[/color][/center]" % [
+				my_in_cost, my_trade_points, my_unid, my_id, my_free
+			]
+		elif not partner_can_afford:
+			text = "[center][color=#ff9944]⚠ 对方接收点数不足 (%d/%d 点)，无法交割[/color] | 我方接收消耗: %d 点 (可用: %d 点)[/center]" % [
+				target_cost, partner_trade_points, my_in_cost, my_trade_points
+			]
+		else:
+			text = "[center]接收消耗: [color=#ffdd44]%d 点[/color] (未鉴定x%d扣%d, 已鉴定x%d扣%d, 基础x%d) | 剩余可用: [color=#44ff66]%d 点[/color][/center]" % [
+				my_in_cost, my_unid, my_unid * 1, my_id, my_id * 10, my_free, max(0, my_trade_points - my_in_cost)
+			]
+
+	lbl_cost_info.text = text
+
+	# 当我方未锁定时，若点数不足则智能置灰阻断确认
+	if not is_my_confirmed:
+		if is_cross_passport and not can_afford:
+			btn_confirm.disabled = true
+			btn_confirm.text = "点数不足 无法确认"
+		elif is_cross_passport and not partner_can_afford:
+			btn_confirm.disabled = true
+			btn_confirm.text = "对方点数不足"
+		else:
+			btn_confirm.disabled = false
+			btn_confirm.text = "锁定并确认交易"
+
 ## 填充 16 格物品网格 (增量复用 Button，更新图标、边框品质与叠加数量)
 func _populate_grid(buttons: Array[Button], items: Array) -> void:
 	for i in range(16):
@@ -554,6 +658,7 @@ func _populate_grid(buttons: Array[Button], items: Array) -> void:
 		var slot_btn = buttons[i]
 		var icon_rect = slot_btn.get_node_or_null("ItemIcon") as TextureRect
 		var amt_lbl = slot_btn.get_node_or_null("AmountLabel") as Label
+		var unid_lbl = slot_btn.get_node_or_null("UnidLabel") as Label
 		
 		var slot_sb = StyleBoxFlat.new()
 		slot_sb.bg_color = Color(0.08, 0.08, 0.1, 0.7)
@@ -583,6 +688,10 @@ func _populate_grid(buttons: Array[Button], items: Array) -> void:
 					amt_lbl.visible = true
 				else:
 					amt_lbl.visible = false
+			
+			var is_unid = bool(item_data.get("unidentified", false)) or AnsiHelper.to_safe_int(item_data.get("unidentified"), 0) == 1
+			if unid_lbl:
+				unid_lbl.visible = is_unid
 					
 			slot_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 		else:
@@ -591,6 +700,8 @@ func _populate_grid(buttons: Array[Button], items: Array) -> void:
 				icon_rect.visible = false
 			if amt_lbl:
 				amt_lbl.visible = false
+			if unid_lbl:
+				unid_lbl.visible = false
 			slot_btn.mouse_filter = Control.MOUSE_FILTER_PASS
 			
 		slot_btn.add_theme_stylebox_override("normal", slot_sb)

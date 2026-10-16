@@ -8,9 +8,13 @@ var slot_index: int = 0
 var amount_label: Label = null
 var check_badge: Label = null
 var new_badge: Label = null
+var unid_badge: Label = null
+var unmet_badge: Label = null
 var sockets_overlay: SocketsOverlay = null
 var is_selected: bool = false
 var is_new_item: bool = false
+var is_unidentified: bool = false
+var is_unmet: bool = false
 var current_quality: String = ""
 
 # 静态缓存各品质专属风格，零冗余开销
@@ -22,6 +26,8 @@ func _ready() -> void:
 	_ensure_amount_label()
 	_ensure_check_badge()
 	_ensure_new_badge()
+	_ensure_unid_badge()
+	_ensure_unmet_badge()
 	_apply_style()
 
 func _ensure_sockets_overlay() -> void:
@@ -103,6 +109,57 @@ func set_slot_new(val: bool) -> void:
 		var tween = create_tween()
 		if tween:
 			tween.tween_property(new_badge, "scale", Vector2(1.0, 1.0), 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _ensure_unid_badge() -> void:
+	if unid_badge == null:
+		unid_badge = Label.new()
+		unid_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		unid_badge.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		unid_badge.offset_left = -16.0
+		unid_badge.offset_top = 0.0
+		unid_badge.offset_right = -2.0
+		unid_badge.offset_bottom = 15.0
+		unid_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		unid_badge.text = "?"
+		unid_badge.add_theme_font_size_override("font_size", 12)
+		unid_badge.add_theme_color_override("font_color", Color(1.0, 0.25, 0.25, 1.0))
+		unid_badge.add_theme_constant_override("outline_size", 2)
+		unid_badge.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+		unid_badge.visible = false
+		add_child(unid_badge)
+
+func set_slot_unidentified(val: bool) -> void:
+	is_unidentified = val
+	_ensure_unid_badge()
+	unid_badge.visible = is_unidentified and (not is_selected)
+
+func _ensure_unmet_badge() -> void:
+	if unmet_badge == null:
+		unmet_badge = Label.new()
+		unmet_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		unmet_badge.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+		unmet_badge.offset_left = 3.0
+		unmet_badge.offset_top = -16.0
+		unmet_badge.offset_right = 16.0
+		unmet_badge.offset_bottom = -1.0
+		unmet_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		unmet_badge.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		unmet_badge.text = "!"
+		unmet_badge.add_theme_font_size_override("font_size", 12)
+		unmet_badge.add_theme_color_override("font_color", Color(1.0, 0.28, 0.28, 1.0))
+		unmet_badge.add_theme_constant_override("outline_size", 2)
+		unmet_badge.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 1.0))
+		
+		var empty_style = StyleBoxEmpty.new()
+		unmet_badge.add_theme_stylebox_override("normal", empty_style)
+		
+		unmet_badge.visible = false
+		add_child(unmet_badge)
+
+func set_slot_unmet(val: bool) -> void:
+	is_unmet = val
+	_ensure_unmet_badge()
+	unmet_badge.visible = is_unmet
 
 static func _get_quality_style(quality: String) -> StyleBoxFlat:
 	var q = quality.to_lower().strip_edges()
@@ -204,6 +261,8 @@ func set_selected(val: bool) -> void:
 	is_selected = val
 	_ensure_check_badge()
 	check_badge.visible = is_selected
+	if unid_badge:
+		unid_badge.visible = is_unidentified and (not is_selected)
 	_apply_style()
 
 func set_slot_amount(amt: int) -> void:

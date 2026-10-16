@@ -216,29 +216,35 @@ static func get_monster_texture(mon_key: String, mon_code: String = "") -> Textu
 		return _texture_cache[cache_key]
 		
 	var file_id = _resolve_png_filename(clean_k, clean_c)
-	var path = "res://assets/monsters/%s.png" % file_id
-	
-	var tex: Texture2D = null
-	if ResourceLoader.exists(path):
-		tex = load(path)
+	var tex: Texture2D = _load_monster_tex(file_id)
 	
 	# 如果未找到，尝试族类回退
 	if not tex:
 		var fallback_path = _find_fallback_path(file_id)
-		if ResourceLoader.exists(fallback_path):
-			tex = load(fallback_path)
+		tex = _load_monster_tex(fallback_path)
 			
 	# 保底：若依然未找到，采用沉沦魔或僵尸底材，绝不报错或显示空图
 	if not tex:
 		if "zombie" in clean_k or "dead" in clean_k:
-			tex = load("res://assets/monsters/zombie.png")
+			tex = _load_monster_tex("zombie")
 		elif "skeleton" in clean_k or "bone" in clean_k:
-			tex = load("res://assets/monsters/skeleton.png")
+			tex = _load_monster_tex("skeleton")
 		else:
-			tex = load("res://assets/monsters/fallen.png")
+			tex = _load_monster_tex("fallen")
 			
 	_texture_cache[cache_key] = tex
 	return tex
+
+## 智能双模加载怪物贴图 (优先 WebP，自动兼容 PNG)
+static func _load_monster_tex(file_or_path: String) -> Texture2D:
+	var id = file_or_path.get_file().to_lower().trim_suffix(".png").trim_suffix(".webp")
+	var p_webp = "res://assets/monsters/%s.webp" % id
+	if ResourceLoader.exists(p_webp):
+		return load(p_webp)
+	var p_png = "res://assets/monsters/%s.png" % id
+	if ResourceLoader.exists(p_png):
+		return load(p_png)
+	return null
 
 ## 解析最贴切的 png 文件名 (不含 .png 后缀)
 static func _resolve_png_filename(mon_key: String, mon_code: String) -> String:

@@ -8,6 +8,73 @@ var character_list: Array = []
 var selected_character: Dictionary = {}
 var selected_difficulty: String = "normal" # "normal" | "nm" | "hell"
 
+## 客户端版本号与服务端版本校验信息
+const CLIENT_VERSION: String = "0.1"
+var version_info: Dictionary = {}
+
+## --- 全局字体偏好管理 (内置暗黑暴雪字体 vs 操作系统清晰字体) ---
+const SETTINGS_SAVE_PATH: String = "user://login_settings.json"
+const BUILTIN_FONT_PATH: String = "res://assets/fonts/blizzardglobal-v5_81.ttf"
+const GLOBAL_THEME_PATH: String = "res://assets/theme/d2_theme.tres"
+
+var use_system_font: bool = false
+var _system_font_inst: SystemFont = null
+var _builtin_font_inst: Font = null
+
+func _ready() -> void:
+	_load_and_apply_font_preference()
+
+func _load_and_apply_font_preference() -> void:
+	if FileAccess.file_exists(SETTINGS_SAVE_PATH):
+		var file = FileAccess.open(SETTINGS_SAVE_PATH, FileAccess.READ)
+		if file:
+			var json_str = file.get_as_text()
+			var json = JSON.new()
+			if json.parse(json_str) == OK and json.data is Dictionary:
+				use_system_font = bool(json.data.get("use_system_font", false))
+	apply_font_preference(use_system_font)
+
+## 全局热切换字体偏好并广播给全场景树
+func apply_font_preference(enable_system_font: bool) -> void:
+	use_system_font = enable_system_font
+	
+	if not _builtin_font_inst:
+		if ResourceLoader.exists(BUILTIN_FONT_PATH):
+			_builtin_font_inst = load(BUILTIN_FONT_PATH)
+	
+	if not _system_font_inst:
+		_system_font_inst = SystemFont.new()
+		_system_font_inst.font_names = PackedStringArray([
+			"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Segoe UI", "sans-serif"
+		])
+		_system_font_inst.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_AUTO
+		_system_font_inst.hinting = TextServer.HINTING_LIGHT
+	
+	var target_font: Font = _system_font_inst if use_system_font else _builtin_font_inst
+	if not target_font:
+		return
+		
+	# 1. 动态注入全局主题 (d2_theme.tres)
+	if ResourceLoader.exists(GLOBAL_THEME_PATH):
+		var global_theme: Theme = load(GLOBAL_THEME_PATH)
+		if global_theme:
+			global_theme.default_font = target_font
+			global_theme.set_font("font", "Label", target_font)
+			global_theme.set_font("font", "Button", target_font)
+			global_theme.set_font("font", "CheckBox", target_font)
+			global_theme.set_font("font", "LineEdit", target_font)
+			global_theme.set_font("normal_font", "RichTextLabel", target_font)
+			global_theme.set_font("bold_font", "RichTextLabel", target_font)
+			
+	# 2. 注入全局 ThemeDB 兜底字体
+	if "fallback_font" in ThemeDB:
+		ThemeDB.fallback_font = target_font
+		
+	# 3. 广播主题刷新通知，让当前活动场景即刻热重绘
+	var tree = get_tree()
+	if tree and tree.root:
+		tree.root.propagate_notification(Control.NOTIFICATION_THEME_CHANGED)
+
 var player_id: String:
 	get:
 		return get_my_character_id()
@@ -45,17 +112,18 @@ const MAX_CHAT_HISTORY: int = 100
 const AnsiHelperScript = preload("res://scripts/utils/ansi_helper.gd")
 
 func add_chat_message(bbcode: String, snippet: String = "") -> void:
-	chat_history.append(bbcode)
+	var clean_bbcode = bbcode.strip_edges(false, true)
+	chat_history.append(clean_bbcode)
 	if chat_history.size() > MAX_CHAT_HISTORY:
 		chat_history.pop_front()
 	
 	if not snippet.is_empty():
 		latest_chat_snippet = AnsiHelperScript.to_plain_text(AnsiHelperScript.strip_bbcode(snippet))
 	else:
-		latest_chat_snippet = AnsiHelperScript.to_plain_text(AnsiHelperScript.strip_bbcode(bbcode))
+		latest_chat_snippet = AnsiHelperScript.to_plain_text(AnsiHelperScript.strip_bbcode(clean_bbcode))
 	latest_chat_snippet = latest_chat_snippet.replace("\n", " ").strip_edges()
 		
-	chat_message_added.emit(bbcode, latest_chat_snippet)
+	chat_message_added.emit(clean_bbcode, latest_chat_snippet)
 
 ## --- 全局队伍状态管理 (支持主城与野外战斗常驻) ---
 signal team_updated(members: Array)

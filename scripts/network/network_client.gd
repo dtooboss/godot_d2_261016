@@ -27,6 +27,12 @@ var auth_pass: String = ""
 var auth_action: String = "login"
 var server_key: String = "AP4s3dF5"
 
+## 动态设置与 LPC 服务端的通信密钥 (解耦硬编码)
+func set_server_key(key: String) -> void:
+	if not key.is_empty():
+		server_key = key
+		print("[NetworkClient] 已动态更新通信密钥")
+
 # 自动重连控制
 var auto_reconnect: bool = true
 var reconnect_attempts: int = 0
@@ -58,7 +64,7 @@ func _process(delta: float) -> void:
 		if not is_connected:
 			is_connected = true
 			emit_signal("connected_to_server")
-			print("[NetworkClient] 已成功建立与 LPC 战网服务器的 TCP 连接")
+			print("[NetworkClient] 已成功建立与 LPC 服务器的 TCP 连接")
 		
 		# 读取所有可用数据
 		var available = tcp_client.get_available_bytes()
@@ -72,9 +78,12 @@ func _process(delta: float) -> void:
 		if is_connected:
 			is_connected = false
 			emit_signal("disconnected_from_server")
-			print("[NetworkClient] 与 LPC 服务器的连接已断开")
-			if auto_reconnect and not manual_disconnect:
-				_start_reconnect_cycle()
+			if not manual_disconnect:
+				print("[NetworkClient] 与 LPC 服务器的连接已断开")
+				if auto_reconnect:
+					_start_reconnect_cycle()
+			else:
+				print("[NetworkClient] 连接已正常关闭 (主动退出)")
 				
 	# 驱动自动重连周期调度
 	if is_reconnecting and not is_connected:
@@ -191,14 +200,19 @@ func _handle_incoming_line(line: String) -> void:
 			cur_char_id = str(gs.selected_character.get("char_id", gs.selected_character.get("id", "")))
 			cur_diff = str(gs.selected_character.get("difficulty", "normal"))
 		
+		var client_ver = "0.1"
+		if gs and "CLIENT_VERSION" in gs:
+			client_ver = str(gs.CLIENT_VERSION)
+		
 		var auth_packet = ""
 		if not cur_char_id.is_empty():
-			# 角色直连恢复协议：user║pass║serverKey║json║char_id║diff
-			print("[NetworkClient] 检测到正在游戏中，发送角色直连恢复协议: ", cur_char_id, " [", cur_diff, "]")
-			auth_packet = "%s║%s║%s║json║%s║%s" % [auth_user, auth_pass, server_key, cur_char_id, cur_diff]
+			# 角色直连恢复协议：user║pass║serverKey║json║char_id║diff║client_version
+			print("[NetworkClient] 检测到正在游戏中，发送角色直连恢复协议: ", cur_char_id, " [", cur_diff, "] 版本: ", client_ver)
+			auth_packet = "%s║%s║%s║json║%s║%s║%s" % [auth_user, auth_pass, server_key, cur_char_id, cur_diff, client_ver]
 		else:
-			# 常规选角大厅协议: user║pass║serverKey║json║action
-			auth_packet = "%s║%s║%s║json║%s" % [auth_user, auth_pass, server_key, auth_action]
+			# 常规选角大厅协议: user║pass║serverKey║json║action║client_version
+			print("[NetworkClient] 发送常规选角大厅协议，版本: ", client_ver)
+			auth_packet = "%s║%s║%s║json║%s║%s" % [auth_user, auth_pass, server_key, auth_action, client_ver]
 		send_raw(auth_packet)
 		return
 		
@@ -220,14 +234,21 @@ func _handle_incoming_line(line: String) -> void:
 			if (dict.has("error") and dict.get("error", 0) != 0) or type == "error":
 				var msg = str(dict.get("msg", "操作失败"))
 				print("[NetworkClient] 收到错误响应: ", msg)
+				manual_disconnect = true # 认证业务明确报错，严禁陷入死循环自动重连
+				_stop_reconnect()
 				emit_signal("login_failed", msg)
 				emit_signal("json_frame_received", "error", dict)
 				return
 				
-			# 检查战网角色大厅列表
+			# 检查角色大厅列表
 			if dict.has("characters") or dict.has("character_list") or type == "character_list":
 				var char_list = dict.get("characters", dict.get("character_list", []))
 				print("[NetworkClient] 收到角色大厅数据: ", char_list.size(), " 个角色")
+				if dict.has("version_check"):
+					var gs_node = get_node_or_null("/root/GameState")
+					if gs_node:
+						gs_node.version_info = dict["version_check"]
+						print("[NetworkClient] 收到版本校验信息: ", gs_node.version_info)
 				if is_reconnecting:
 					_stop_reconnect()
 					emit_signal("reconnected_to_server")
@@ -263,6 +284,37 @@ func disconnect_server(is_manual: bool = true) -> void:
 	if is_manual:
 		manual_disconnect = true
 		_stop_reconnect()
+		if overlay and is_instance_valid(overlay) and overlay.is_inside_tree():
+			overlay.hide_overlay()
 	if is_connected:
 		tcp_client.disconnect_from_host()
 		is_connected = false
+
+## 针对用户点击【退出到标题】/【退出登录】的原子安全退出操作
+## 保证：第一时间锁死 manual_disconnect 阻断重连 -> 发送 quit 指令 -> 缓冲刷出 -> 彻底切断连接 -> 重置全局状态
+func safe_quit_and_disconnect() -> void:
+	print("[NetworkClient] 触发主动安全退出游戏流程...")
+	manual_disconnect = true
+	_stop_reconnect()
+	if overlay and is_instance_valid(overlay) and overlay.is_inside_tree():
+		overlay.hide_overlay()
+	
+	if is_connected:
+		print("[NetworkClient] 正在向 LPC 服务端发送安全登出指令 (quit)...")
+		send_raw("quit")
+		tcp_client.poll()
+		
+		# 等待 80ms 确保 quit 数据包从 socket 缓冲发往服务器，并让服务端完成存盘
+		var tree = Engine.get_main_loop() as SceneTree
+		if tree:
+			await tree.create_timer(0.08).timeout
+			
+		tcp_client.disconnect_from_host()
+		is_connected = false
+		print("[NetworkClient] 登出完成，已安全断开 TCP 连接")
+	else:
+		print("[NetworkClient] 当前未连接服务器，直接完成登出状态清理")
+		
+	var gs = get_node_or_null("/root/GameState")
+	if gs and gs.has_method("reset_on_logout"):
+		gs.reset_on_logout()

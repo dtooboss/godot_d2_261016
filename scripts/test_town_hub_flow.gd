@@ -79,7 +79,7 @@ func _run_test() -> void:
 	hub._on_json_frame_received("objects", mock_heroes)
 	
 	# 模拟聊天消息
-	hub._append_chat("[color=#ffd700]【系统】欢迎回到庇护之地！当前大本营已建立战网英雄同盟集结。[/color]")
+	hub._append_chat("[color=#ffd700]【系统】欢迎回到罗格要塞！当前大本营已建立英雄同盟集结。[/color]")
 	hub._append_chat("[color=#93c5fd]【光明使者亚瑟】[/color] 地狱巴尔已死，有没有大佬一起速刷牛场？")
 	hub._append_chat("[color=#fca5a5]【野蛮战神柯南】[/color] 我来！刚打造出悔恨幻化之刃！")
 	hub._append_chat("[color=#a7f3d0]【风暴莉莉安】[/color] 亚马逊求借一颗亮金戒指，有羁绊交易点的私聊！")

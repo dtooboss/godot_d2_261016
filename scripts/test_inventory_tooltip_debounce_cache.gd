@@ -7,7 +7,7 @@ var sent_commands: Array[String] = []
 func _ready() -> void:
 	await get_tree().process_frame
 	
-	print("=== 开始验证背包悬浮防误关、60秒短时缓存与 250ms 防抖机制 ===")
+	print("=== 开始验证背包悬浮防误关、无 look 缓存与 300ms 延时 look 机制 ===")
 	
 	var net = get_node_or_null("/root/NetworkClient")
 	if net:
@@ -24,7 +24,7 @@ func _ready() -> void:
 	assert(inv_panel != null, "inv_panel 必须存在")
 	assert(tooltip != null, "tooltip 必须存在")
 	
-	# 清空缓存与命令队列
+	# 清空命令队列
 	AFK_ItemTooltip.clear_cache()
 	sent_commands.clear()
 	
@@ -82,32 +82,32 @@ func _ready() -> void:
 	assert(tooltip.visible == false, "真正离开当前槽位后 Tooltip 正常隐藏")
 	
 	# =========================================================================
-	# 测试 2: 验证 250ms 黄金悬停防抖机制 (快速划过路过格子 0 发包)
+	# 测试 2: 验证 300ms 黄金悬停防抖机制 (快速划过路过格子 0 发包)
 	# =========================================================================
-	print("\n--- [测试 2] 验证 250ms 悬停防抖机制 ---")
+	print("\n--- [测试 2] 验证 300ms 悬停防抖机制 ---")
 	sent_commands.clear()
 	
-	# 快速划过 Slot 0 (停留 100ms 立即移走，远低于 250ms 阈值)
+	# 快速划过 Slot 0 (停留 150ms 立即移走，低于 300ms 阈值)
 	inv_panel._on_slot_hovered(0, slot0_btn)
-	await get_tree().create_timer(0.10).timeout
+	await get_tree().create_timer(0.15).timeout
 	inv_panel._on_slot_unhovered(0)
-	await get_tree().create_timer(0.18).timeout # 总等待 280ms
+	await get_tree().create_timer(0.20).timeout # 总等待 350ms
 	
-	assert(sent_commands.is_empty(), "停留时间未达到 250ms，严禁发送任何 look 网络包！实际发包: %s" % str(sent_commands))
-	print("✓ 快速扫过格子 (100ms < 250ms) 成功被防抖拦截，完全零发包")
+	assert(sent_commands.is_empty(), "停留时间未达到 300ms，严禁发送任何 look 网络包！实际发包: %s" % str(sent_commands))
+	print("✓ 快速扫过格子 (150ms < 300ms) 成功被防抖拦截，完全零发包")
 	
-	# 稳定悬停在 Slot 0 (停留超过 250ms，如 300ms)
+	# 稳定悬停在 Slot 0 (停留超过 300ms，如 350ms)
 	inv_panel._on_slot_hovered(0, slot0_btn)
-	await get_tree().create_timer(0.30).timeout # 等待 300ms
+	await get_tree().create_timer(0.35).timeout # 等待 350ms
 	
-	assert(sent_commands.size() == 1, "停留超过 250ms 后应正式发包 1 次")
+	assert(sent_commands.size() == 1, "停留超过 300ms 后应正式发包 1 次")
 	assert(sent_commands[0] == "look /d/d2/obj/diadem#1001", "发出的命令必须为目标装备的 look 指令")
-	print("✓ 停留达到 250ms 后成功发出 look 指令: %s" % sent_commands[0])
+	print("✓ 停留达到 300ms 后成功发出 look 指令: %s" % sent_commands[0])
 	
 	# =========================================================================
-	# 测试 3: 验证 60 秒客户端内存缓存机制 (命中则 0 发包秒显)
+	# 测试 3: 验证无缓存实时机制 (重访每次均发送 look，确保属性点变动实时计算红白)
 	# =========================================================================
-	print("\n--- [测试 3] 验证 60 秒本地内存缓存机制 ---")
+	print("\n--- [测试 3] 验证无 look 缓存实时发包机制 ---")
 	sent_commands.clear()
 	
 	# 模拟服务端下发权威词缀 panel 帧
@@ -126,28 +126,28 @@ func _ready() -> void:
 	await get_tree().process_frame
 	assert(tooltip.visible == false, "Tooltip 隐藏")
 	
-	# 再次移入 Slot 0 (在 60 秒缓存有效期内，等待 300ms 超过防抖阈值)
+	# 再次移入 Slot 0 (停顿超过 300ms)
 	inv_panel._on_slot_hovered(0, slot0_btn)
-	await get_tree().create_timer(0.30).timeout
+	await get_tree().create_timer(0.35).timeout
 	
-	# 关键断言: 缓存命中，完全不需要发包！且权威内容秒出！
-	assert(tooltip.visible == true, "Tooltip 应瞬间展示")
-	assert(tooltip.content_label.text.contains("-20% 敌人闪电抗性"), "应直接从 60 秒缓存读取完整权威词缀")
-	assert(sent_commands.size() == 0, "命中本地短时缓存时，发包计数必须为 0！实际发包: %s" % str(sent_commands))
-	print("✓ 测试 3 通过: 60 秒本地短时缓存 100% 命中，0 发包秒显权威词缀！")
+	# 关键断言: 无本地缓存，重访依然触发 300ms 延时实时 look 请求，确保属性变更不卡红
+	assert(tooltip.visible == true, "Tooltip 应展示骨架")
+	assert(sent_commands.size() == 1, "取消本地缓存后，重访停顿必须重新发包向服务端请求最新状态！实际发包: %s" % str(sent_commands))
+	assert(sent_commands[0] == "look /d/d2/obj/diadem#1001", "重访发出的必须是 look 指令")
+	print("✓ 测试 3 通过: 无本地缓存干扰，重访装备停顿 300ms 实时发包请求服务端最新数据！")
 	
 	inv_panel._on_slot_unhovered(0)
 	await get_tree().process_frame
 	
 	# =========================================================================
-	# 测试 4: 验证迟到在途回包守护机制 (光标已移走，回包安全入缓存且不闪烁错误UI)
+	# 测试 4: 验证迟到在途回包守护机制 (光标已移走，迟到包不闪烁错误UI)
 	# =========================================================================
-	print("\n--- [测试 4] 验证迟到在途回包写入缓存守护 ---")
+	print("\n--- [测试 4] 验证迟到在途回包守护 ---")
 	sent_commands.clear()
 	
-	# 鼠标悬停 Slot 1 (谜团) 超过 250ms 发出网络请求
+	# 鼠标悬停 Slot 1 (谜团) 超过 300ms 发出网络请求
 	inv_panel._on_slot_hovered(1, slot1_btn)
-	await get_tree().create_timer(0.30).timeout
+	await get_tree().create_timer(0.35).timeout
 	assert(sent_commands.size() == 1, "Slot 1 触发网络请求")
 	assert(sent_commands[0] == "look /d/d2/obj/armor#1002", "发出谜团 look 请求")
 	
@@ -163,20 +163,11 @@ func _ready() -> void:
 	net.json_frame_received.emit("panel", enigma_panel)
 	await get_tree().process_frame
 	
-	# 断言 1: Tooltip 绝不会因为迟到回包而错误弹出或闪烁
+	# 断言: Tooltip 绝不会因为迟到回包而错误弹出或闪烁
 	assert(tooltip.visible == false, "迟到回包绝不能导致隐藏的 Tooltip 错误弹出！")
-	
-	# 断言 2: 再次悬停 Slot 1 时，直接命中迟到回包写入的缓存，0 发包秒显
-	sent_commands.clear()
-	inv_panel._on_slot_hovered(1, slot1_btn)
-	await get_tree().create_timer(0.30).timeout
-	
-	assert(tooltip.visible == true, "再次悬停立即秒显")
-	assert(tooltip.content_label.text.contains("+1 传送"), "应直接命中迟到回包缓存的词缀")
-	assert(sent_commands.is_empty(), "缓存命中，不应再发送任何网络包")
-	print("✓ 测试 4 通过: 在途回包守护有效，迟到包安全写入 60s 缓存，移出不误显且重访秒显！")
+	print("✓ 测试 4 通过: 在途回包守护有效，移出后迟到包不误显！")
 	
 	print("\n=======================================================")
-	print("🎉 恭喜！背包防误关、60秒缓存与 250ms 防抖测试全部通过！")
+	print("🎉 恭喜！背包防误关、无 look 缓存与 300ms 防抖测试全部通过！")
 	print("=======================================================")
 	get_tree().quit(0)

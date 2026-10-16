@@ -36,7 +36,7 @@ func _test_monster_debuff_rendering() -> void:
 		"max_hp": 100,
 		"level": 5,
 		"debuffs": [
-			{"id": "amplify_damage", "name": "伤害加深", "color": "#ff3333"},
+			{"id": "amplify_damage", "name": "加深", "color": "#ff3333"},
 			{"id": "poison", "name": "剧毒", "color": "#00ff66"}
 		]
 	}
@@ -51,7 +51,7 @@ func _test_monster_debuff_rendering() -> void:
 	var badge_amp = debuff_box.get_child(0)
 	var lbl_amp = badge_amp.get_child(0) as Label
 	print("  徽章 1: '%s'" % lbl_amp.text)
-	assert("伤害加深" in lbl_amp.text and "🩸" in lbl_amp.text, "伤害加深徽章内容正确")
+	assert("加深" in lbl_amp.text and "🩸" in lbl_amp.text, "加深徽章内容正确")
 
 	var badge_poi = debuff_box.get_child(1)
 	var lbl_poi = badge_poi.get_child(0) as Label

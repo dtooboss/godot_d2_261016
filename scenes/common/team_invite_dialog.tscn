@@ -91,7 +91,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
 theme_override_font_sizes/font_size = 14
-text = "❖ 庇护之地 · 组队邀请 ❖"
+text = "❖ 避难所世界 · 组队邀请 ❖"
 vertical_alignment = 1
 
 [node name="BtnClose" type="Button" parent="CenterContainer/Panel/VBox/TitleBar/HBox"]

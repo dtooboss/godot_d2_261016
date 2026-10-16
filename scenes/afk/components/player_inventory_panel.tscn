@@ -179,11 +179,19 @@ theme_override_constants/separation = 6
 
 [node name="BtnSort" type="Button" parent="Panel/VBox/FooterBar/HBox"]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(46, 24)
+custom_minimum_size = Vector2(40, 24)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
 theme_override_styles/normal = ExtResource("5")
 text = "整理"
+
+[node name="BtnIdentifyAll" type="Button" parent="Panel/VBox/FooterBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(56, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+theme_override_styles/normal = ExtResource("5")
+text = "一键鉴定"
 
 [node name="BagDropdown" type="OptionButton" parent="Panel/VBox/FooterBar/HBox"]
 custom_minimum_size = Vector2(86, 24)

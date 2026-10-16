@@ -6,6 +6,7 @@ extends Control
 @onready var id_input: LineEdit = $Panel/VBox/InputContainer/IdInput
 @onready var pass_input: LineEdit = $Panel/VBox/InputContainer/PassInput
 @onready var remember_check: CheckBox = $Panel/VBox/RememberContainer/RememberCheck
+@onready var system_font_check: CheckBox = $Panel/VBox/RememberContainer/SystemFontCheck
 
 # 大区选择条
 @onready var server_info_label: Label = $Panel/VBox/ServerContainer/ServerInfoLabel
@@ -21,48 +22,138 @@ extends Control
 @onready var realm_modal: Control = $RealmModal
 @onready var realm_list_vbox: VBoxContainer = $RealmModal/CenterContainer/Panel/VBox/Scroll/RealmListVBox
 @onready var btn_close_modal: Button = $RealmModal/CenterContainer/Panel/VBox/BtnCloseModal
+@onready var footer_info: RichTextLabel = get_node_or_null("FooterInfo")
 
-const REMOTE_REALMS_URL: String = "http://o.rainplay.cn:53000/"
 const CACHE_REALMS_PATH: String = "user://cached_realms.json"
 const DEFAULT_REALMS_PATH: String = "res://data/default_realms.json"
 const SAVE_PATH: String = "user://login_settings.json"
 
+var remote_realms_url: String = "http://o.rainplay.cn:53000/"
+var external_realms_loaded: bool = false
+var cmdline_override_realm: bool = false
+
 var realms: Array = []
 var current_realm: Dictionary = {}
 var selected_realm_id: String = ""
+var _last_error_time: float = 0.0
 
 var _http_request: HTTPRequest = null
 
 func _ready() -> void:
-	# 1. 先载入本地离线大区与账号配置，确保界面毫秒级秒开
+	# 0. 刷新客户端版本号显示 (绿色 V0.1)
+	if footer_info:
+		var ver_str = GameState.CLIENT_VERSION if (GameState and "CLIENT_VERSION" in GameState) else "0.1"
+		footer_info.text = "[right]《劳模必须死》CLIENT [color=#44ff44]V%s[/color] · 第一幕 游侠营地[/right]" % ver_str
+
+	# 1. 优先载入外部配置与解析启动命令行参数 (解耦写死IP与通信密钥)
+	_load_external_configs()
+	_apply_cmdline_args()
+
+	# 2. 载入本地/缓存大区与账号配置，确保界面毫秒级秒开
 	_load_local_realms()
 	_load_saved_settings()
+	if cmdline_override_realm:
+		_apply_cmdline_args() # 命令行指定服务器拥有最高优先级
 	_update_server_display()
 	
-	# 2. 连接 NetworkClient 信号
+	# 3. 连接 NetworkClient 信号
 	NetworkClient.connected_to_server.connect(_on_connected)
 	NetworkClient.connection_failed.connect(_on_connection_failed)
 	NetworkClient.disconnected_from_server.connect(_on_disconnected)
 	NetworkClient.login_success.connect(_on_login_success)
 	NetworkClient.login_failed.connect(_on_login_failed)
 	
-	# 3. 按钮点击绑定
+	# 4. 按钮点击绑定
 	btn_login.pressed.connect(_on_login_pressed)
 	btn_register.pressed.connect(_on_register_pressed)
 	btn_exit.pressed.connect(_on_exit_pressed)
 	btn_change_server.pressed.connect(_open_realm_modal)
 	btn_close_modal.pressed.connect(_close_realm_modal)
+	if system_font_check:
+		system_font_check.button_pressed = GameState.use_system_font
+		system_font_check.toggled.connect(_on_system_font_toggled)
 	
-	# 4. 回车直接触发登录
+	# 5. 回车直接触发登录
 	id_input.text_submitted.connect(func(_text): pass_input.grab_focus())
 	pass_input.text_submitted.connect(func(_text): _on_login_pressed())
 	id_input.grab_focus()
 	
-	# 5. 后台异步静默从远程拉取最新大区列表
-	_fetch_remote_realms()
+	# 6. 后台异步静默从远程拉取最新大区列表 (若未显式被命令行锁定)
+	if not cmdline_override_realm:
+		_fetch_remote_realms()
 
-## 从本地载入大区数据 (优先缓存，其次默认内置)
+## 载入外部配置文件 (支持可执行文件同级 server_config.json 或 realms.json)
+func _load_external_configs() -> void:
+	var base_dir = OS.get_executable_path().get_base_dir()
+	var search_paths = [
+		base_dir + "/server_config.json",
+		base_dir + "/realms.json",
+		"res://server_config.json",
+		"user://server_config.json"
+	]
+	
+	for arg in OS.get_cmdline_args():
+		if arg.begins_with("--config="):
+			search_paths.insert(0, arg.substr(9).strip_edges())
+			
+	for cfg_path in search_paths:
+		if FileAccess.file_exists(cfg_path):
+			var file = FileAccess.open(cfg_path, FileAccess.READ)
+			if file:
+				var json = JSON.new()
+				if json.parse(file.get_as_text()) == OK:
+					if json.data is Dictionary:
+						var dict: Dictionary = json.data
+						if dict.has("server_key"):
+							NetworkClient.set_server_key(str(dict["server_key"]))
+						if dict.has("realms_url"):
+							remote_realms_url = str(dict["realms_url"])
+						if dict.has("realms") and dict["realms"] is Array and dict["realms"].size() > 0:
+							realms = dict["realms"]
+							external_realms_loaded = true
+							print("[Login] 成功从外部配置文件载入大区配置: ", cfg_path)
+							break
+					elif json.data is Array and json.data.size() > 0:
+						realms = json.data
+						external_realms_loaded = true
+						print("[Login] 成功从外部 JSON 载入大区列表: ", cfg_path)
+						break
+
+## 应用启动命令行参数 (支持 --server=IP:PORT, --server-key=KEY, --realms-url=URL)
+func _apply_cmdline_args() -> void:
+	for arg in OS.get_cmdline_args():
+		if arg.begins_with("--server-key="):
+			var key = arg.substr(13).strip_edges()
+			NetworkClient.set_server_key(key)
+		elif arg.begins_with("--realms-url="):
+			remote_realms_url = arg.substr(13).strip_edges()
+		elif arg.begins_with("--server="):
+			var s_val = arg.substr(9).strip_edges()
+			var host = s_val
+			var port = 7878
+			if ":" in s_val:
+				var parts = s_val.split(":")
+				host = parts[0]
+				port = int(parts[1]) if parts[1].is_valid_int() else 7878
+			
+			current_realm = {
+				"id": "cmdline_custom",
+				"name": "自定义服务器 (%s:%d)" % [host, port],
+				"tag": "命令行",
+				"status": "smooth",
+				"host": host,
+				"port": port
+			}
+			selected_realm_id = "cmdline_custom"
+			cmdline_override_realm = true
+			print("[Login] 命令行指定服务器参数: %s:%d" % [host, port])
+
+## 从本地载入大区数据 (优先外部/缓存，其次默认内置)
 func _load_local_realms() -> void:
+	if external_realms_loaded:
+		_sync_selected_realm()
+		return
+
 	var loaded = false
 	if FileAccess.file_exists(CACHE_REALMS_PATH):
 		var file = FileAccess.open(CACHE_REALMS_PATH, FileAccess.READ)
@@ -92,7 +183,7 @@ func _fetch_remote_realms() -> void:
 		add_child(_http_request)
 		_http_request.request_completed.connect(_on_remote_realms_received)
 		
-	var err = _http_request.request(REMOTE_REALMS_URL)
+	var err = _http_request.request(remote_realms_url)
 	if err != OK:
 		print("[Login] 远程大区拉取请求失败，保持本地离线配置: ", err)
 
@@ -119,6 +210,9 @@ func _on_remote_realms_received(result: int, response_code: int, _headers: Packe
 
 ## 同步当前选中的大区对象
 func _sync_selected_realm() -> void:
+	if cmdline_override_realm:
+		return
+
 	if realms.is_empty():
 		current_realm = {
 			"id": "default",
@@ -269,7 +363,7 @@ func _execute_auth(action: String) -> void:
 	var pass_str = pass_input.text.strip_edges()
 	
 	if user.is_empty():
-		_set_status("请输入战网通行证账号", Color(1.0, 0.4, 0.4))
+		_set_status("请输入通行证账号", Color(1.0, 0.4, 0.4))
 		id_input.grab_focus()
 		return
 		
@@ -292,6 +386,7 @@ func _execute_auth(action: String) -> void:
 		_set_status("正在连接【%s】要塞..." % r_name, Color(0.8, 0.8, 0.9))
 		
 	_save_settings()
+	_last_error_time = 0.0
 	
 	# 私有内部读取 host 与 port，UI 绝对不显示
 	var host = str(current_realm.get("host", "127.0.0.1"))
@@ -308,10 +403,14 @@ func _on_connection_failed() -> void:
 
 func _on_disconnected() -> void:
 	_set_loading(false)
+	var now = Time.get_ticks_msec() / 1000.0
+	if now - _last_error_time < 5.0:
+		# 刚刚发生过登录/注册业务错误，保留具体的错误提示文案
+		return
 	_set_status("与服务器的连接已中断", Color(1.0, 0.4, 0.4))
 
 func _on_login_success(characters: Array) -> void:
-	_set_status("认证成功！正在载入战网英雄大厅...", Color(0.4, 1.0, 0.5))
+	_set_status("认证成功！正在载入英雄圣殿...", Color(0.4, 1.0, 0.5))
 	print("[Login] 成功获取角色列表: ", characters)
 	GameState.character_list = characters
 	GameState.current_account = id_input.text.strip_edges().to_lower()
@@ -320,6 +419,7 @@ func _on_login_success(characters: Array) -> void:
 	get_tree().change_scene_to_file("res://scenes/lobby/character_select_screen.tscn")
 
 func _on_login_failed(err_msg: String) -> void:
+	_last_error_time = Time.get_ticks_msec() / 1000.0
 	_set_loading(false)
 	var display_msg = err_msg
 	if not ("失败" in display_msg or "错误" in display_msg or "已被" in display_msg or "不存在" in display_msg):
@@ -340,6 +440,10 @@ func _set_status(msg: String, color: Color) -> void:
 func _on_exit_pressed() -> void:
 	get_tree().quit()
 
+func _on_system_font_toggled(button_pressed: bool) -> void:
+	GameState.apply_font_preference(button_pressed)
+	_save_settings()
+
 func _load_saved_settings() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
 		var file = FileAccess.open(SAVE_PATH, FileAccess.READ)
@@ -352,8 +456,13 @@ func _load_saved_settings() -> void:
 				if data.get("remember", false):
 					remember_check.button_pressed = true
 					pass_input.text = str(data.get("pass", ""))
-				selected_realm_id = str(data.get("selected_realm_id", ""))
-				_sync_selected_realm()
+				if data.has("use_system_font") and system_font_check:
+					var use_sys = bool(data.get("use_system_font", false))
+					system_font_check.button_pressed = use_sys
+					GameState.apply_font_preference(use_sys)
+				if not cmdline_override_realm:
+					selected_realm_id = str(data.get("selected_realm_id", ""))
+					_sync_selected_realm()
 
 func _save_settings() -> void:
 	var file = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -362,6 +471,7 @@ func _save_settings() -> void:
 			"user": id_input.text.strip_edges(),
 			"remember": remember_check.button_pressed,
 			"pass": pass_input.text if remember_check.button_pressed else "",
-			"selected_realm_id": selected_realm_id
+			"selected_realm_id": selected_realm_id,
+			"use_system_font": system_font_check.button_pressed if system_font_check else false
 		}
 		file.store_string(JSON.stringify(data))

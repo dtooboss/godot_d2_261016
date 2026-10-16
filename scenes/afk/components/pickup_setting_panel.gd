@@ -38,24 +38,24 @@ func _ready() -> void:
 		btn_preset_safe.tooltip_text = "【开荒全留】：全部不勾选，所有掉落装备全部拾取入包"
 		btn_preset_safe.pressed.connect(func(): _apply_preset("safe"))
 	if btn_preset_farm:
-		btn_preset_farm.tooltip_text = "【进阶挂机】：自动熔炼白蓝装与粗糙黄装，保留暗金、套装与极品底材"
+		btn_preset_farm.tooltip_text = "【进阶挂机】：自动分解白蓝装与粗糙黄装，保留暗金、套装与极品底材"
 		btn_preset_farm.pressed.connect(func(): _apply_preset("farm"))
 	if btn_preset_speed:
-		btn_preset_speed.tooltip_text = "【极速神装】：自动熔炼白蓝黄绿大件，仅保留暗金神装与底材"
+		btn_preset_speed.tooltip_text = "【极速神装】：自动分解白蓝黄绿大件，仅保留暗金神装与底材"
 		btn_preset_speed.pressed.connect(func(): _apply_preset("speed"))
 		
 	if tab_container:
-		tab_container.set_tab_title(0, "装备自动熔炼")
+		tab_container.set_tab_title(0, "装备自动分解")
 		tab_container.set_tab_title(1, "杂项与保护")
 
 	_init_d2_equipment_rows()
 
 func _init_d2_equipment_rows() -> void:
-	# 暗黑2正统 6 大品质/分类定义（彻底消除拾取与熔炼歧义）
+	# 暗黑2正统 6 大品质/分类定义（彻底消除拾取与分解歧义）
 	var d2_rarities = [
 		{
 			"id": "normal",
-			"name": "普通装备 (白色 · 勾选熔炼 / 不勾拾取)",
+			"name": "普通装备 (白色 · 勾选分解 / 不勾拾取)",
 			"color": Color(0.85, 0.85, 0.85), # 纯白
 			"sub_types": [
 				{"name": "武器", "key": "white_weapon"},
@@ -66,7 +66,7 @@ func _init_d2_equipment_rows() -> void:
 		},
 		{
 			"id": "superior",
-			"name": "特殊属性 (超强/无形/带孔底材 · 勾选放行熔炼 / 不勾受保护)",
+			"name": "特殊属性 (超强/无形/带孔底材 · 勾选放行分解 / 不勾受保护)",
 			"color": Color(0.6, 0.8, 1.0), # 淡蓝银灰
 			"sub_types": [
 				{"name": "超强属性 (+ED/耐久)", "key": "superior_prop"},
@@ -76,7 +76,7 @@ func _init_d2_equipment_rows() -> void:
 		},
 		{
 			"id": "magic",
-			"name": "魔法装备 (蓝色 · 勾选熔炼 / 不勾拾取)",
+			"name": "魔法装备 (蓝色 · 勾选分解 / 不勾拾取)",
 			"color": Color(0.35, 0.5, 1.0), # 暗黑蓝
 			"sub_types": [
 				{"name": "武器", "key": "magic_weapon"},
@@ -87,7 +87,7 @@ func _init_d2_equipment_rows() -> void:
 		},
 		{
 			"id": "rare",
-			"name": "稀有装备 (亮金 · 勾选熔炼 / 不勾拾取)",
+			"name": "稀有装备 (亮金 · 勾选分解 / 不勾拾取)",
 			"color": Color(1.0, 1.0, 0.4), # 亮金
 			"sub_types": [
 				{"name": "武器", "key": "rare_weapon"},
@@ -98,7 +98,7 @@ func _init_d2_equipment_rows() -> void:
 		},
 		{
 			"id": "set",
-			"name": "套装装备 (绿色 · 勾选熔炼 / 不勾拾取)",
+			"name": "套装装备 (绿色 · 勾选分解 / 不勾拾取)",
 			"color": Color(0.1, 0.9, 0.1), # 暗黑绿
 			"sub_types": [
 				{"name": "套装武器", "key": "set_weapon"},
@@ -107,7 +107,7 @@ func _init_d2_equipment_rows() -> void:
 		},
 		{
 			"id": "unique",
-			"name": "暗金装备 (金色 · 勾选熔炼 / 不勾拾取)",
+			"name": "暗金装备 (金色 · 勾选分解 / 不勾拾取)",
 			"color": Color(0.85, 0.72, 0.4), # 暗金色
 			"sub_types": [
 				{"name": "暗金武器", "key": "unique_weapon"},

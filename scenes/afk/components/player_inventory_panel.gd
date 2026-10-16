@@ -11,6 +11,7 @@ signal command_sent(cmd: String)
 @onready var inv_button_container: VBoxContainer = %InvButtonContainer
 @onready var gold_label: Label = %GoldLabel
 @onready var btn_sort: Button = %BtnSort
+@onready var btn_identify_all: Button = %BtnIdentifyAll
 @onready var btn_help: Button = %BtnHelp
 @onready var btn_pocket: Button = %BtnPocket
 @onready var btn_multi_select: Button = %BtnMultiSelect
@@ -62,6 +63,10 @@ func _ready() -> void:
 	if btn_sort:
 		btn_sort.pressed.connect(func():
 			_send_lpc_cmd("gbag %d sort" % current_page)
+		)
+	if btn_identify_all:
+		btn_identify_all.pressed.connect(func():
+			_send_lpc_cmd("gidentify all")
 		)
 	if btn_multi_select:
 		btn_multi_select.pressed.connect(_on_multi_select_pressed)
@@ -301,6 +306,10 @@ func render_lpc_items(items_list: Array, charm_used: int = -1, charm_max: int = 
 			btn.set_slot_sockets(0, [])
 		if btn.has_method("set_slot_new"):
 			btn.set_slot_new(false)
+		if btn.has_method("set_slot_unidentified"):
+			btn.set_slot_unidentified(false)
+		if btn.has_method("set_slot_unmet"):
+			btn.set_slot_unmet(false)
 		
 	var main_bag_items: Array = []
 	var pocket_items: Array = []
@@ -334,6 +343,20 @@ func render_lpc_items(items_list: Array, charm_used: int = -1, charm_max: int = 
 			var last_slot = min(main_bag_items.size() - 1, slots.size() - 1)
 			_play_slot_pickup_fx(last_slot)
 
+	# 4. 一键鉴定按钮动态状态 (若有未辨识物品则高亮提醒)
+	if btn_identify_all:
+		var has_unid = false
+		for m_it in main_bag_items:
+			if bool(m_it.get("unidentified", false)):
+				has_unid = true
+				break
+		if has_unid:
+			btn_identify_all.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+			btn_identify_all.text = "一键鉴定!"
+		else:
+			btn_identify_all.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75, 1.0))
+			btn_identify_all.text = "一键鉴定"
+
 func _parse_single_lpc_item(it: Dictionary) -> Dictionary:
 	var raw_name = str(it.get("name", "未命名物品"))
 	var icon_path = str(it.get("icon", ""))
@@ -345,6 +368,7 @@ func _parse_single_lpc_item(it: Dictionary) -> Dictionary:
 	var is_charm = AnsiHelper.to_safe_int(it.get("is_charm"), 0) == 1
 	var c_size = AnsiHelper.to_safe_int(it.get("charm_size"), 1)
 	var file_id = str(it.get("file_id", ""))
+	var is_unid = AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1 or bool(it.get("unidentified", false))
 	
 	if file_id.is_empty() and cmd_str.begins_with("look "):
 		file_id = cmd_str.substr(5).strip_edges()
@@ -395,8 +419,13 @@ func _parse_single_lpc_item(it: Dictionary) -> Dictionary:
 		"is_charm": is_charm,
 		"charm_size": c_size,
 		"d2_type": str(it.get("d2_type", "")),
+		"slot": str(it.get("slot", "")),
+		"is_consumable": AnsiHelper.to_safe_int(it.get("is_consumable"), 0),
+		"is_stackable": AnsiHelper.to_safe_int(it.get("is_stackable"), 0),
 		"is_rune": AnsiHelper.to_safe_int(it.get("is_rune"), 0),
 		"is_gem": AnsiHelper.to_safe_int(it.get("is_gem"), 0),
+		"unidentified": is_unid,
+		"unmet": AnsiHelper.to_safe_int(it.get("unmet", 0), 0),
 	}
 	
 	var tex = _resolve_smart_icon(clean_name, icon_path)
@@ -480,6 +509,10 @@ func set_lpc_item(slot_idx: int, item_data: Dictionary) -> void:
 	if btn.has_method("set_slot_new"):
 		var fid = _get_item_unique_id(item_data)
 		btn.set_slot_new(not fid.is_empty() and new_item_ids.has(fid))
+	if btn.has_method("set_slot_unidentified"):
+		btn.set_slot_unidentified(bool(item_data.get("unidentified", false)))
+	if btn.has_method("set_slot_unmet"):
+		btn.set_slot_unmet(bool(item_data.get("unmet", false)))
 
 ## 增量添加掉落战利品 (0 延迟即时落入背包，无重绘无闪烁)
 func add_incremental_reward(reward_item: Dictionary, gold_val: int = 0) -> bool:
@@ -564,29 +597,21 @@ func add_incremental_reward(reward_item: Dictionary, gold_val: int = 0) -> bool:
 	return true
 
 func _is_item_stackable(item_data: Dictionary) -> bool:
+	# 1. 优先以后端权威元数据标记驱动
+	if item_data.has("is_stackable"):
+		return AnsiHelper.to_safe_int(item_data.get("is_stackable"), 0) == 1
 	if bool(item_data.get("is_combined", false)):
 		return true
 	if AnsiHelper.to_safe_int(item_data.get("is_rune"), 0) == 1 or AnsiHelper.to_safe_int(item_data.get("is_gem"), 0) == 1:
 		return true
+	if AnsiHelper.to_safe_int(item_data.get("amount"), 1) > 1:
+		return true
+	if _is_item_consumable(item_data):
+		return true
 		
-	var it_type = str(item_data.get("type", "")).to_lower()
+	# 2. 字段类型判定 (消除符文中文名称特判与硬编码 ID)
+	var it_type = str(item_data.get("d2_type", item_data.get("type", ""))).to_lower()
 	if it_type in ["符文", "宝石", "药水", "卷轴", "材料", "rune", "gem", "potion", "scroll", "material"]:
-		return true
-		
-	var id_s = str(item_data.get("id", "")) .to_lower()
-	if id_s.begins_with("r") and id_s.length() <= 3 and id_s.substr(1).is_valid_int():
-		return true
-	if id_s in ["isc", "tsc", "mp1", "mp2", "mp3", "mp4", "mp5", "hp1", "hp2", "hp3", "hp4", "hp5", "rvs", "rvl", "key"]:
-		return true
-		
-	var clean_name = AnsiHelper.to_plain_text(str(item_data.get("name", "")))
-	if "号" in clean_name and ("符文" in clean_name or "塔尔" in clean_name or "艾尔" in clean_name or "爱司" in clean_name or "特尔" in clean_name or "那夫" in clean_name or "伊司" in clean_name or "拉尔" in clean_name or "欧特" in clean_name or "书尔" in clean_name or "安姆" in clean_name or "索尔" in clean_name or "沙希" in clean_name or "多尔" in clean_name or "海尔" in clean_name or "埃欧" in clean_name or "卢姆" in clean_name or "科" in clean_name or "法尔" in clean_name or "蓝姆" in clean_name or "普尔" in clean_name or "乌姆" in clean_name or "马尔" in clean_name or "伊斯特" in clean_name or "古尔" in clean_name or "伐克斯" in clean_name or "欧姆" in clean_name or "罗" in clean_name or "瑟" in clean_name or "贝" in clean_name or "乔" in clean_name or "查姆" in clean_name or "佐德" in clean_name):
-		return true
-	if "药水" in clean_name or "药" in clean_name or "卷轴" in clean_name or "碎裂" in clean_name or "裂开" in clean_name or "无瑕" in clean_name or "完美" in clean_name or "宝石" in clean_name or "钻石" in clean_name or "骷髅" in clean_name:
-		return true
-		
-	var icon_s = str(item_data.get("icon", "")).to_lower()
-	if "rune" in icon_s or "gem" in icon_s or "potion" in icon_s or "scroll" in icon_s:
 		return true
 		
 	return false
@@ -704,6 +729,10 @@ func update_item_amount(file_id: String, new_amount: int) -> bool:
 					btn.set_slot_sockets(0, [])
 				if btn.has_method("set_slot_new"):
 					btn.set_slot_new(false)
+				if btn.has_method("set_slot_unidentified"):
+					btn.set_slot_unidentified(false)
+				if btn.has_method("set_slot_unmet"):
+					btn.set_slot_unmet(false)
 					
 	# 3. 同步更新 raw_all_items 中的对应数据（保证换页或重新排序时数据权威性）
 	var raw_found = false
@@ -723,23 +752,22 @@ func update_item_amount(file_id: String, new_amount: int) -> bool:
 	return (target_slot != -1 or raw_found)
 
 func _is_item_consumable(item_data: Dictionary) -> bool:
+	# 1. 优先以后端权威元数据标记驱动
+	if item_data.has("is_consumable"):
+		return AnsiHelper.to_safe_int(item_data.get("is_consumable"), 0) == 1
 	if bool(item_data.get("is_potion", false)):
 		return true
-	var d2_type = str(item_data.get("d2_type", "")).to_lower()
-	if d2_type in ["药水", "potion", "scroll", "卷轴", "消耗品", "consumable"]:
+
+	# 2. 字段类型判定 (消除中文名称猜解和硬编码 ID 白名单)
+	var d2_type = str(item_data.get("d2_type", item_data.get("type", ""))).to_lower()
+	if d2_type in ["药水", "potion", "scroll", "卷轴", "消耗品", "consumable", "food", "pill", "book", "书"]:
 		return true
-	var it_type = str(item_data.get("type", "")).to_lower()
-	if it_type in ["药水", "potion", "scroll", "卷轴", "消耗品", "consumable", "food", "pill"]:
+
+	# 3. 任务与功能消耗道具兜底
+	var iname = str(item_data.get("name", ""))
+	if "技能之书" in iname or "生命药剂" in iname or "抵抗卷轴" in iname or "赦免徽章" in iname or "蓝·森之书" in iname or "蓝森之书" in iname:
 		return true
-	var id_s = str(item_data.get("id", "")).to_lower()
-	if id_s in ["hp1", "hp2", "hp3", "hp4", "hp5", "mp1", "mp2", "mp3", "mp4", "mp5", "rvs", "rvl", "isc", "tsc"]:
-		return true
-	var clean_name = AnsiHelper.to_plain_text(str(item_data.get("name", "")))
-	if "药水" in clean_name or "药剂" in clean_name or "治疗药" in clean_name or "法力药" in clean_name or "活力药" in clean_name or "回城卷轴" in clean_name or "辨识卷轴" in clean_name:
-		return true
-	var fid = str(item_data.get("file_id", "")).to_lower()
-	if "potion" in fid or "scroll" in fid:
-		return true
+
 	return false
 
 func _on_slot_hovered(slot_idx: int, btn: Button) -> void:
@@ -786,17 +814,23 @@ func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -
 				if fid.is_empty():
 					return
 					
-				# 0.4 如果储物箱面板正打开 -> 直接存入储物箱当前仓位！
+				# 0.4 如果双向交易面板处于开启状态 -> 调用 trade_panel.offer_item (叠加物品智能弹窗选数量，单件装备直接放入)
+				var cur_scene = get_tree().current_scene
+				if cur_scene and "trade_panel" in cur_scene and cur_scene.trade_panel and cur_scene.trade_panel.visible:
+					cur_scene.trade_panel.offer_item(it)
+					return
+
+				# 0.5 如果物品是未辨识装备/护身符 -> 绝对优先执行右键辨识 (优先消耗辨识卷轴，缺卷轴自动扣 2,000 金币)
+				var is_unid = bool(it.get("unidentified", false)) or AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1
+				if is_unid:
+					_send_lpc_cmd("gidentify %s" % fid)
+					return
+
+				# 0.6 如果储物箱面板正打开 -> 直接存入储物箱当前仓位！
 				var host = _get_host_controller()
 				if host and "stash_panel" in host and host.stash_panel and host.stash_panel.is_visible_in_tree():
 					var s_tab = host.stash_panel.current_tab
 					_send_lpc_cmd("stash store %s %d" % [fid, s_tab])
-					return
-
-				# 0.5 如果双向交易面板处于开启状态 -> 调用 trade_panel.offer_item (叠加物品智能弹窗选数量，单件装备直接放入)
-				var cur_scene = get_tree().current_scene
-				if cur_scene and "trade_panel" in cur_scene and cur_scene.trade_panel and cur_scene.trade_panel.visible:
-					cur_scene.trade_panel.offer_item(it)
 					return
 
 				# 1. 如果工坊面板正打开 -> 优先处理工坊操作 (直接由 LPC 指令全权判断处理，前端只负责发指令与纯渲染)

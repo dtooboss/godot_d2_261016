@@ -37,7 +37,7 @@ func refresh_cards() -> void:
 			"req_lvl": 1,
 			"req_stage": 0,
 			"req_desc": "",
-			"bg": "res://mods/vanilla/assets/worlds/1/map.png"
+			"bg": "res://mods/vanilla/assets/worlds/1/map.webp"
 		},
 		{
 			"id": "act2",
@@ -45,7 +45,7 @@ func refresh_cards() -> void:
 			"req_lvl": 14,
 			"req_stage": 14,
 			"req_desc": "通关地下墓穴第四层(安达莉尔)",
-			"bg": "res://mods/vanilla/assets/worlds/2/map.png"
+			"bg": "res://mods/vanilla/assets/worlds/2/map.webp"
 		},
 		{
 			"id": "act3",
@@ -53,7 +53,7 @@ func refresh_cards() -> void:
 			"req_lvl": 21,
 			"req_stage": 34,
 			"req_desc": "通关督瑞尔巢穴(都瑞尔)",
-			"bg": "res://mods/vanilla/assets/worlds/3/map.png"
+			"bg": "res://mods/vanilla/assets/worlds/3/map.webp"
 		},
 		{
 			"id": "act4",
@@ -61,7 +61,7 @@ func refresh_cards() -> void:
 			"req_lvl": 26,
 			"req_stage": 56,
 			"req_desc": "通关憎恨王座(墨菲斯托)",
-			"bg": "res://mods/vanilla/assets/worlds/4/map.png"
+			"bg": "res://mods/vanilla/assets/worlds/4/map.webp"
 		},
 		{
 			"id": "act5",
@@ -69,7 +69,7 @@ func refresh_cards() -> void:
 			"req_lvl": 30,
 			"req_stage": 64,
 			"req_desc": "通关混沌避难所(迪亚波罗)",
-			"bg": "res://mods/vanilla/assets/worlds/5/map.png"
+			"bg": "res://mods/vanilla/assets/worlds/5/map.webp"
 		}
 	]
 	
@@ -84,14 +84,22 @@ func refresh_cards() -> void:
 		var panel = PanelContainer.new()
 		panel.custom_minimum_size = Vector2(0, 110)
 		
-		# 权威解锁判定：优先信任后端下发的 unlocked 标志；若无缓存则按通关关卡保底
+		# 权威解锁判定：优先信任后端下发的 unlocked 标志；若无缓存则按通关关卡与角色档案保底
 		var is_unlocked = false
 		var wid = str(w["id"])
 		if server_worlds_map.has(wid):
 			var s_data = server_worlds_map[wid]
 			is_unlocked = bool(s_data.get("unlocked", 0))
 		else:
-			is_unlocked = (w["req_stage"] == 0) or (p_max_stage >= w["req_stage"])
+			var char_data = GameState.selected_character if GameState.selected_character is Dictionary else {}
+			var wp_map = char_data.get("d2_waypoints", {}) if char_data.get("d2_waypoints") is Dictionary else {}
+			var is_wp_unlocked = false
+			if wid == "act2" and (AnsiHelper.to_safe_int(char_data.get("d2_act1_completed", 0)) > 0 or AnsiHelper.to_safe_int(wp_map.get("lut_gholein", 0)) > 0): is_wp_unlocked = true
+			elif wid == "act3" and (AnsiHelper.to_safe_int(char_data.get("d2_act2_completed", 0)) > 0 or AnsiHelper.to_safe_int(wp_map.get("kurast_docks", 0)) > 0): is_wp_unlocked = true
+			elif wid == "act4" and (AnsiHelper.to_safe_int(char_data.get("d2_act3_completed", 0)) > 0 or AnsiHelper.to_safe_int(wp_map.get("pandemonium_fortress", 0)) > 0): is_wp_unlocked = true
+			elif wid == "act5" and (AnsiHelper.to_safe_int(char_data.get("d2_act4_completed", 0)) > 0 or AnsiHelper.to_safe_int(wp_map.get("harrogath", 0)) > 0): is_wp_unlocked = true
+			
+			is_unlocked = (w["req_stage"] == 0) or (p_max_stage >= w["req_stage"]) or is_wp_unlocked
 		
 		var style = StyleBoxFlat.new()
 		style.bg_color = Color(0.12, 0.12, 0.12, 0.95) if is_unlocked else Color(0.08, 0.08, 0.08, 0.90)

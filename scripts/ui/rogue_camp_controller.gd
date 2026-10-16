@@ -44,7 +44,7 @@ func _ready() -> void:
 	
 	# 向服务端发送 look 刷新当前营地全貌与 NPC 列表
 	NetworkClient.send_raw("look")
-	_show_toast("已安全抵达【罗格营地】大本营！")
+	_show_toast("已安全抵达【游侠营地】大本营！")
 
 func _init_player_ui() -> void:
 	var cdata = GameState.selected_character
@@ -181,7 +181,7 @@ func _on_text_received(text: String) -> void:
 	_append_chat(text)
 
 func _append_chat(msg: String) -> void:
-	chat_log.append_text(msg + "\n")
+	chat_log.append_text(msg.strip_edges(false, true) + "\n")
 
 func _show_toast(msg: String) -> void:
 	toast_label.text = msg

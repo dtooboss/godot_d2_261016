@@ -7,7 +7,7 @@ func _ready() -> void:
 	
 	# 1. 真实 ACT 1 战斗地表背景
 	var bg = TextureRect.new()
-	bg.texture = load("res://mods/vanilla/assets/worlds/1/1.png")
+	bg.texture = load("res://mods/vanilla/assets/worlds/1/1.webp")
 	bg.size = Vector2(960, 540)
 	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED

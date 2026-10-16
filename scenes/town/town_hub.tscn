@@ -206,7 +206,7 @@ custom_minimum_size = Vector2(0, 32)
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 13
-text = "🔮 赫拉迪克方块"
+text = "🔮 秘法魔盒"
 
 [node name="ChatPanel" type="PanelContainer" parent="MainLayout/LeftArea"]
 layout_mode = 2
@@ -409,19 +409,26 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Panel" type="PanelContainer" parent="LeaderboardModal/CenterContainer"]
-custom_minimum_size = Vector2(560, 460)
+custom_minimum_size = Vector2(700, 530)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_leaderboard")
 
 [node name="VBox" type="VBoxContainer" parent="LeaderboardModal/CenterContainer/Panel"]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 8
 
 [node name="RankTitle" type="Label" parent="LeaderboardModal/CenterContainer/Panel/VBox"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.95, 0.85, 0.55, 1)
-theme_override_font_sizes/font_size = 16
-text = "🏆 庇护之地 · 全服天梯英雄榜"
+theme_override_font_sizes/font_size = 17
+text = "🏆 圣域天梯英雄榜 (SEASON 1)"
+horizontal_alignment = 1
+
+[node name="RankSubtitle" type="Label" parent="LeaderboardModal/CenterContainer/Panel/VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.65, 0.55, 1)
+theme_override_font_sizes/font_size = 11
+text = "以推关征途与巅峰等级铸就的传奇 · 点击英雄条目可锁定流派档案"
 horizontal_alignment = 1
 
 [node name="HSeparator" type="HSeparator" parent="LeaderboardModal/CenterContainer/Panel/VBox"]
@@ -436,10 +443,10 @@ horizontal_scroll_mode = 0
 layout_mode = 2
 size_flags_horizontal = 3
 size_flags_vertical = 3
-theme_override_constants/separation = 6
+theme_override_constants/separation = 8
 
 [node name="BtnCloseRank" type="Button" parent="LeaderboardModal/CenterContainer/Panel/VBox"]
-custom_minimum_size = Vector2(100, 32)
+custom_minimum_size = Vector2(120, 34)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 13
@@ -447,20 +454,21 @@ text = "关闭天梯榜"
 
 [node name="ToastLabel" type="Label" parent="."]
 visible = false
+z_index = 20
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -260.0
-offset_top = -200.0
-offset_right = 260.0
-offset_bottom = -160.0
+offset_left = -300.0
+offset_top = -290.0
+offset_right = 300.0
+offset_bottom = -250.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 15
 text = "通知信息"
 horizontal_alignment = 1
 vertical_alignment = 1
