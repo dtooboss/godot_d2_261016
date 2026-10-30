@@ -95,7 +95,24 @@ signal panel_visibility_changed(is_visible: bool)
 var equips_map: Dictionary = {}
 var current_stat_points: int = 0
 var current_respecs: int = 0
-var current_respec_price: int = 50000
+var current_respec_price: int = 0
+var current_level: int = 1
+var current_gold: int = 0
+
+static func _calc_respec_gold_cost(lvl: int) -> int:
+	if lvl < 1: lvl = 1
+	return 10000 + (lvl * lvl * lvl * lvl) / 2
+
+static func _format_gold(amount: int) -> String:
+	var s = str(amount)
+	var res = ""
+	var count = 0
+	for i in range(s.length() - 1, -1, -1):
+		res = s[i] + res
+		count += 1
+		if count % 3 == 0 and i > 0:
+			res = "," + res
+	return res
 
 func _ready() -> void:
 	hide()
@@ -110,7 +127,7 @@ func _ready() -> void:
 	if btn_reset_stats:
 		btn_reset_stats.pressed.connect(_on_reset_stats_pressed)
 	if btn_buy_respec:
-		btn_buy_respec.pressed.connect(_on_buy_respec_pressed)
+		btn_buy_respec.visible = false
 	
 	_setup_slot(slot_helmet, "helmet", "head")
 	_setup_slot(slot_armor, "armor", "armor")
@@ -132,47 +149,42 @@ func _bind_add_button(btn: Button, stat_name: String) -> void:
 		)
 
 func _on_reset_stats_pressed() -> void:
-	if current_respecs <= 0:
-		var dlg = ConfirmationDialog.new()
-		dlg.title = "属性洗点机会不足"
-		dlg.dialog_text = "当前属性洗点机会不足！\n是否花费 %d 金币购买 1 次属性洗点机会？" % current_respec_price
-		dlg.ok_button_text = "前往购买"
-		dlg.cancel_button_text = "取消"
-		add_child(dlg)
-		dlg.confirmed.connect(func():
-			_on_buy_respec_pressed()
-			dlg.queue_free()
-		)
-		dlg.canceled.connect(func(): dlg.queue_free())
-		dlg.popup_centered()
-		return
-
 	var dlg = ConfirmationDialog.new()
-	dlg.title = "重置属性点"
-	dlg.dialog_text = "确定要消耗 1 次属性洗点机会重置所有属性点吗？\n已分配的属性点将 100%% 全额退还为未分配点数。（当前剩余: %d 次）" % current_respecs
-	dlg.ok_button_text = "确认重置"
 	dlg.cancel_button_text = "取消"
 	add_child(dlg)
-	dlg.confirmed.connect(func():
-		_send_lpc_cmd("gresetstat")
-		dlg.queue_free()
-	)
+
+	if current_respecs > 0:
+		dlg.title = "重置属性点 (免费)"
+		dlg.dialog_text = "确定要消耗 1 次【免费洗点机会】重置所有属性点吗？\n已分配的属性点将 100%% 全额退还为未分配点数。（当前剩余免费: %d 次）" % current_respecs
+		dlg.ok_button_text = "确认重置"
+		dlg.confirmed.connect(func():
+			_send_lpc_cmd("gresetstat")
+			dlg.queue_free()
+		)
+	else:
+		var cost = current_respec_price if current_respec_price > 0 else _calc_respec_gold_cost(current_level)
+		dlg.title = "重置属性点 (消耗金币)"
+		if current_gold < cost:
+			dlg.dialog_text = "任务免费洗点次数已用尽！\n本次重置需要消耗金币：%s\n当前拥有金币：%s\n\n【金币不足，无法洗点】" % [
+				_format_gold(cost), _format_gold(current_gold)
+			]
+			dlg.ok_button_text = "我知道了"
+			dlg.confirmed.connect(func(): dlg.queue_free())
+		else:
+			dlg.dialog_text = "任务免费洗点次数已用尽！\n本次重置需要消耗金币：%s\n当前拥有金币：%s\n\n是否确认扣除金币并重置属性点？" % [
+				_format_gold(cost), _format_gold(current_gold)
+			]
+			dlg.ok_button_text = "确认扣费并重置"
+			dlg.confirmed.connect(func():
+				_send_lpc_cmd("gresetstat")
+				dlg.queue_free()
+			)
+
 	dlg.canceled.connect(func(): dlg.queue_free())
 	dlg.popup_centered()
 
 func _on_buy_respec_pressed() -> void:
-	var dlg = ConfirmationDialog.new()
-	dlg.title = "购买属性洗点"
-	dlg.dialog_text = "确定要花费 %d 金币购买 1 次【属性洗点机会】吗？" % current_respec_price
-	dlg.ok_button_text = "确认购买"
-	dlg.cancel_button_text = "取消"
-	add_child(dlg)
-	dlg.confirmed.connect(func():
-		_send_lpc_cmd("gbuyrespec stat")
-		dlg.queue_free()
-	)
-	dlg.canceled.connect(func(): dlg.queue_free())
-	dlg.popup_centered()
+	pass
 
 func _setup_slot(btn: Button, slot_key: String, mud_part: String) -> void:
 	if not btn:
@@ -291,16 +303,23 @@ func render_gscore_data(data: Dictionary) -> void:
 	if lbl_mp: lbl_mp.text = "%d / %d" % [mp, max_mp]
 	if points_label: points_label.text = str(current_stat_points)
 
+	current_level = lvl
+	current_gold = _safe_int(data.get("gold", 0), 0)
 	current_respecs = _safe_int(data.get("stat_respecs", data.get("free_respecs", 0)), 0)
-	current_respec_price = _safe_int(data.get("respec_price", 25000), 25000)
+	var dynamic_cost = _calc_respec_gold_cost(current_level)
+	current_respec_price = _safe_int(data.get("respec_gold_cost", data.get("respec_price", dynamic_cost)), dynamic_cost)
+
 	if lbl_respec_count:
-		lbl_respec_count.text = "洗点: %d次" % current_respecs
 		if current_respecs > 0:
+			lbl_respec_count.text = "免费洗点: %d次" % current_respecs
 			lbl_respec_count.modulate = Color(0.4, 0.95, 0.4, 1.0)
 		else:
-			lbl_respec_count.modulate = Color(0.7, 0.7, 0.7, 0.8)
+			lbl_respec_count.text = "洗点: %s金币" % _format_gold(current_respec_price)
+			lbl_respec_count.modulate = Color(0.95, 0.8, 0.3, 1.0)
+		lbl_respec_count.tooltip_text = "剩余免费洗点 %d 次。免费次数用尽后，每次洗点消耗 10000+等级^4/2 金币。" % current_respecs
+
 	if btn_buy_respec:
-		btn_buy_respec.tooltip_text = "花费 %d 金币购买 1 次属性洗点机会" % current_respec_price
+		btn_buy_respec.visible = false
 	
 	# 2. 四维核心属性（显示实时值与基础加成，如 11 (+1)）
 	var str_v = _safe_int(data.get("str"), 10)

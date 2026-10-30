@@ -44,6 +44,7 @@ func _ready() -> void:
 	if equip_slot_btn:
 		equip_slot_btn.mouse_entered.connect(_on_equip_slot_hovered)
 		equip_slot_btn.mouse_exited.connect(_on_slot_unhovered)
+		equip_slot_btn.gui_input.connect(_on_equip_slot_gui_input)
 	if tool_slot_btn:
 		tool_slot_btn.mouse_entered.connect(_on_tool_slot_hovered)
 		tool_slot_btn.mouse_exited.connect(_on_slot_unhovered)
@@ -276,12 +277,15 @@ func _render_sockets_grid(sock_count: int, inlays: Array) -> void:
 		slot_p.add_child(v_box)
 		sockets_grid.add_child(slot_p)
 
-# ========== 拖拽接收逻辑 (KISS 原则：不猜类型，全部交由 LPC 处理) ==========
+# ========== 拖拽接收逻辑 (未辨识物品绝对禁止放入工坊) ==========
 func _can_drop_data(_at_position: Vector2, data: Variant) -> bool:
 	if not (data is Dictionary):
 		return false
 	var it = data.get("item_data", {})
 	if it.is_empty():
+		return false
+	var is_unid = bool(it.get("unidentified", false)) or AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1 or AnsiHelper.to_safe_int(it.get("d2_unidentified"), 0) == 1
+	if is_unid:
 		return false
 	return not str(it.get("file_id", "")).is_empty()
 
@@ -291,6 +295,9 @@ func _drop_data(_at_position: Vector2, data: Variant) -> void:
 	var it = data.get("item_data", {})
 	var fid = str(it.get("file_id", ""))
 	if fid.is_empty():
+		return
+	var is_unid = bool(it.get("unidentified", false)) or AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1 or AnsiHelper.to_safe_int(it.get("d2_unidentified"), 0) == 1
+	if is_unid:
 		return
 		
 	# 直接派发给 LPC 专属工坊指令判定放置或镶嵌
@@ -344,3 +351,8 @@ func _on_tool_slot_hovered() -> void:
 
 func _on_slot_unhovered() -> void:
 	item_unhovered.emit()
+
+func _on_equip_slot_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_RIGHT and not current_equipment.is_empty():
+			_on_take_out_pressed()

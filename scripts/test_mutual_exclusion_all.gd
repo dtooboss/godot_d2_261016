@@ -19,40 +19,26 @@ func _run_tests() -> void:
 	var pocket = inv.little_pocket_panel
 	var wb = inv.socketing_workbench_panel
 
-	# 1. 打开小口袋 -> 工坊保持关闭
+	# 1. 挂机战斗区：合成魔盒与镶嵌打孔按钮必须置灰禁用 (disabled = true)
+	assert(hud.control_matrix.btn_workbench != null, "[HUD] 控制矩阵必须包含镶嵌打孔按钮")
+	assert(hud.control_matrix.btn_workbench.disabled == true, "[HUD] 战斗挂机区镶嵌打孔按钮必须置灰禁用！")
+	assert(hud.control_matrix.btn_craft != null, "[HUD] 控制矩阵必须包含合成魔盒按钮")
+	assert(hud.control_matrix.btn_craft.disabled == true, "[HUD] 战斗挂机区合成魔盒按钮必须置灰禁用！")
+
+	# 2. 挂机战斗区：尝试调用 toggle 方法必须被拦截，窗口保持不可见
+	hud.toggle_workbench()
+	assert(!wb.visible, "[HUD] 战斗挂机区工坊窗口绝对不可被打开！")
+	hud.toggle_cube_panel()
+	assert(!hud.cube_panel.visible, "[HUD] 战斗挂机区魔盒窗口绝对不可被打开！")
+
+	# 3. 挂机战斗区：小口袋与纸娃娃互斥依然正常运作
 	inv.btn_pocket.emit_signal("pressed")
 	assert(pocket.visible, "[HUD] 点击小口袋按钮后小口袋必须打开")
-	assert(!wb.visible, "[HUD] 打开小口袋后工坊必须保持关闭")
-
-	# 2. 点击工坊 -> 小口袋自动关闭，工坊打开
-	inv.btn_workbench.emit_signal("pressed")
-	assert(!pocket.visible, "[HUD] 打开工坊后小口袋必须互斥自动关闭")
-	assert(wb.visible, "[HUD] 工坊必须已打开")
-
-	# 3. 点击小口袋 -> 工坊自动关闭，小口袋打开
-	inv.btn_pocket.emit_signal("pressed")
-	assert(!wb.visible, "[HUD] 打开小口袋后工坊必须互斥自动关闭")
-	assert(pocket.visible, "[HUD] 小口袋必须已重新打开")
-
-	# 4. 打开魔盒 -> 小口袋与工坊全部互斥关闭
-	hud.toggle_cube_panel()
-	assert(hud.cube_panel.visible, "[HUD] 魔盒必须已打开")
-	assert(!pocket.visible, "[HUD] 打开魔盒后小口袋必须互斥自动关闭")
-	assert(!wb.visible, "[HUD] 打开魔盒后工坊必须保持关闭")
-
-	# 5. 在魔盒打开时打开工坊 -> 魔盒自动关闭，工坊打开
-	inv.btn_workbench.emit_signal("pressed")
-	assert(wb.visible, "[HUD] 工坊必须已打开")
-	assert(!hud.cube_panel.visible, "[HUD] 打开工坊后魔盒必须互斥自动关闭")
-	assert(!pocket.visible, "[HUD] 打开工坊后小口袋必须保持关闭")
-
-	# 6. 打开纸娃娃 -> 工坊必须自动互斥关闭
 	hud.toggle_character_info()
 	assert(hud.char_info_panel.visible, "[HUD] 纸娃娃必须已打开")
-	assert(!wb.visible, "[HUD] 打开纸娃娃后工坊必须互斥自动关闭")
 	assert(!pocket.visible, "[HUD] 打开纸娃娃后小口袋必须保持关闭")
 
-	print("✔ Part 1: Combat AFK HUD full mutual exclusion verified 100%!")
+	print("✔ Part 1: Combat AFK HUD disabled state & mutual exclusion verified 100%!")
 	hud.queue_free()
 	await get_tree().process_frame
 
@@ -73,8 +59,10 @@ func _run_tests() -> void:
 	assert(t_pocket.visible, "[Town] 点击小口袋按钮后小口袋必须打开")
 	assert(!t_wb.visible, "[Town] 打开小口袋后工坊必须保持关闭")
 
-	# 2. 安全区点击工坊 -> 小口袋自动关闭
-	t_inv.btn_workbench.emit_signal("pressed")
+	# 2. 安全区点击底部控制矩阵 '镶嵌打孔' -> 小口袋自动关闭
+	assert(town.control_matrix.btn_workbench != null, "[Town] 控制矩阵必须包含镶嵌打孔按钮")
+	assert(town.control_matrix.btn_workbench.text == "镶嵌打孔", "[Town] 镶嵌打孔按钮文字必须为 '镶嵌打孔'")
+	town.control_matrix.btn_workbench.emit_signal("pressed")
 	assert(!t_pocket.visible, "[Town] 打开工坊后小口袋必须互斥自动关闭")
 	assert(t_wb.visible, "[Town] 工坊必须已打开")
 

@@ -108,14 +108,6 @@ theme_override_font_sizes/font_size = 12
 theme_override_styles/normal = SubResource("StyleBoxFlat_btn_multiselect")
 text = "多选"
 
-[node name="BtnWorkbench" type="Button" parent="Panel/VBox/TitleBar/HBox"]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(46, 22)
-layout_mode = 2
-theme_override_font_sizes/font_size = 12
-theme_override_styles/normal = SubResource("StyleBoxFlat_btn_multiselect")
-text = "工坊"
-
 [node name="TitleLabel" type="Label" parent="Panel/VBox/TitleBar/HBox"]
 layout_mode = 2
 size_flags_horizontal = 3

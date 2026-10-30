@@ -52,7 +52,24 @@ var _selected_skill_code: String = ""
 var _node_widgets: Dictionary = {} # code -> Control
 var _node_selection_boxes: Dictionary = {} # code -> Panel
 var _skill_respecs: int = 0
-var _respec_price: int = 25000
+var _respec_price: int = 0
+var _player_level: int = 1
+var _player_gold: int = 0
+
+static func _calc_respec_gold_cost(lvl: int) -> int:
+	if lvl < 1: lvl = 1
+	return 10000 + (lvl * lvl * lvl * lvl) / 2
+
+static func _format_gold(amount: int) -> String:
+	var s = str(amount)
+	var res = ""
+	var count = 0
+	for i in range(s.length() - 1, -1, -1):
+		res = s[i] + res
+		count += 1
+		if count % 3 == 0 and i > 0:
+			res = "," + res
+	return res
 
 # 网格坐标常数 (6 行 3 列)
 const GRID_START_X = 65.0
@@ -63,6 +80,8 @@ const NODE_SIZE = 50.0
 
 func _ready() -> void:
 	hide()
+	if btn_buy_skill_respec:
+		btn_buy_skill_respec.visible = false
 	if btn_close:
 		btn_close.pressed.connect(close)
 	if btn_reset:
@@ -108,16 +127,23 @@ func render_gskills_data(data: Dictionary) -> void:
 		else:
 			points_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 
+	_player_level = _safe_int(data.get("level", 1), 1)
+	_player_gold = _safe_int(data.get("gold", 0), 0)
 	_skill_respecs = _safe_int(data.get("skill_respecs", data.get("free_respecs", 0)), 0)
-	_respec_price = _safe_int(data.get("respec_price", 25000), 25000)
+	var dynamic_cost = _calc_respec_gold_cost(_player_level)
+	_respec_price = _safe_int(data.get("respec_gold_cost", data.get("respec_price", dynamic_cost)), dynamic_cost)
+
 	if lbl_skill_respec_count:
-		lbl_skill_respec_count.text = "洗点: %d次" % _skill_respecs
 		if _skill_respecs > 0:
+			lbl_skill_respec_count.text = "免费洗点: %d次" % _skill_respecs
 			lbl_skill_respec_count.modulate = Color(0.4, 0.95, 0.4, 1.0)
 		else:
-			lbl_skill_respec_count.modulate = Color(0.7, 0.7, 0.7, 0.8)
+			lbl_skill_respec_count.text = "洗点: %s金币" % _format_gold(_respec_price)
+			lbl_skill_respec_count.modulate = Color(0.95, 0.8, 0.3, 1.0)
+		lbl_skill_respec_count.tooltip_text = "剩余免费技能洗点 %d 次。免费次数用尽后，每次洗点消耗 10000+等级^4/2 金币。" % _skill_respecs
+
 	if btn_buy_skill_respec:
-		btn_buy_skill_respec.tooltip_text = "花费 %d 金币购买 1 次技能洗点机会" % _respec_price
+		btn_buy_skill_respec.visible = false
 			
 	if class_avatar:
 		class_avatar.texture = _get_class_icon(_current_class)
@@ -765,45 +791,40 @@ func _resolve_skill_display_name(sk_code: String) -> String:
 	return sk_code
 
 func _on_buy_respec_pressed() -> void:
-	var dlg = ConfirmationDialog.new()
-	dlg.title = "购买技能洗点"
-	dlg.dialog_text = "确定要花费 %d 金币购买 1 次【技能洗点机会】吗？" % _respec_price
-	dlg.ok_button_text = "确认购买"
-	dlg.cancel_button_text = "取消"
-	add_child(dlg)
-	dlg.confirmed.connect(func():
-		skill_buy_respec_requested.emit()
-		dlg.queue_free()
-	)
-	dlg.canceled.connect(func(): dlg.queue_free())
-	dlg.popup_centered()
+	pass
 
 func _on_reset_pressed() -> void:
-	if _skill_respecs <= 0:
-		var dlg = ConfirmationDialog.new()
-		dlg.title = "技能洗点机会不足"
-		dlg.dialog_text = "当前技能洗点机会不足！\n是否花费 %d 金币购买 1 次技能洗点机会？" % _respec_price
-		dlg.ok_button_text = "前往购买"
-		dlg.cancel_button_text = "取消"
-		add_child(dlg)
-		dlg.confirmed.connect(func():
-			_on_buy_respec_pressed()
-			dlg.queue_free()
-		)
-		dlg.canceled.connect(func(): dlg.queue_free())
-		dlg.popup_centered()
-		return
-
 	var dlg = ConfirmationDialog.new()
-	dlg.title = "重置技能点"
-	dlg.dialog_text = "确定要消耗 1 次技能洗点机会重置全部技能点吗？\n已分配的所有技能点将 100%% 全额返还。（当前剩余: %d 次）" % _skill_respecs
-	dlg.ok_button_text = "确认重置"
 	dlg.cancel_button_text = "取消"
 	add_child(dlg)
-	dlg.confirmed.connect(func():
-		skill_reset_requested.emit()
-		dlg.queue_free()
-	)
+
+	if _skill_respecs > 0:
+		dlg.title = "重置技能点 (免费)"
+		dlg.dialog_text = "确定要消耗 1 次【免费技能洗点机会】重置全部技能点吗？\n已分配的所有技能点将 100%% 全额返还为可用技能点。（当前剩余免费: %d 次）" % _skill_respecs
+		dlg.ok_button_text = "确认重置"
+		dlg.confirmed.connect(func():
+			skill_reset_requested.emit()
+			dlg.queue_free()
+		)
+	else:
+		var cost = _respec_price if _respec_price > 0 else _calc_respec_gold_cost(_player_level)
+		dlg.title = "重置技能点 (消耗金币)"
+		if _player_gold < cost:
+			dlg.dialog_text = "任务免费洗点次数已用尽！\n本次重置需要消耗金币：%s\n当前拥有金币：%s\n\n【金币不足，无法洗点】" % [
+				_format_gold(cost), _format_gold(_player_gold)
+			]
+			dlg.ok_button_text = "我知道了"
+			dlg.confirmed.connect(func(): dlg.queue_free())
+		else:
+			dlg.dialog_text = "任务免费洗点次数已用尽！\n本次重置技能点需要消耗金币：%s\n当前拥有金币：%s\n\n是否确认扣除金币并重置技能点？" % [
+				_format_gold(cost), _format_gold(_player_gold)
+			]
+			dlg.ok_button_text = "确认扣费并重置"
+			dlg.confirmed.connect(func():
+				skill_reset_requested.emit()
+				dlg.queue_free()
+			)
+
 	dlg.canceled.connect(func(): dlg.queue_free())
 	dlg.popup_centered()
 

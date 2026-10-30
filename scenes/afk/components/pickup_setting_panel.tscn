@@ -37,17 +37,17 @@ grow_vertical = 2
 color = Color(0, 0, 0, 0.45)
 
 [node name="Panel" type="PanelContainer" parent="."]
-custom_minimum_size = Vector2(440, 430)
+custom_minimum_size = Vector2(500, 470)
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -215.0
-offset_right = 220.0
-offset_bottom = 215.0
+offset_left = -250.0
+offset_top = -235.0
+offset_right = 250.0
+offset_bottom = 235.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_pickup_bg")
@@ -188,6 +188,121 @@ theme_override_colors/font_color = Color(0.4, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 12
 button_pressed = true
 text = "🛡️ 极品底材保护 (天然带孔/超强/无形底材永久豁免分解)"
+
+[node name="JsonTab" type="MarginContainer" parent="Panel/VBox/TabMargin/TabContainer"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="JsonVBox" type="VBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/JsonTab"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TogglesHBox" type="HBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ChkEnableCustomJson" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/TogglesHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 12
+text = "启用客户端细则分解"
+
+[node name="ChkAutoSalvageLoot" type="CheckBox" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/TogglesHBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.85, 1.0, 1)
+theme_override_font_sizes/font_size = 12
+text = "掉落时自动按细则清理"
+
+[node name="BtnBarHBox" type="HBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BtnImportJsonFile" type="Button" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/BtnBarHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "📁 导入文件"
+
+[node name="BtnExportJsonFile" type="Button" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/BtnBarHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "💾 导出文件"
+
+[node name="BtnResetDefaultJson" type="Button" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/BtnBarHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 24)
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "↺ 恢复默认"
+
+[node name="BtnCleanBagNow" type="Button" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/BtnBarHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(95, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.5, 0.4, 1)
+theme_override_font_sizes/font_size = 11
+text = "⚡ 清理背包"
+
+[node name="BtnToggleView" type="Button" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/BtnBarHBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 24)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.85, 0.5, 1)
+theme_override_font_sizes/font_size = 11
+text = "📝 代码视图"
+
+[node name="LblJsonStatus" type="Label" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.65, 0.7, 1)
+theme_override_font_sizes/font_size = 10
+text = "白名单居上优先保留；未命中的装备由下半区黑名单目标执行分解。"
+
+[node name="ScrollVisualRules" type="ScrollContainer" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="VisualRulesVBox" type="VBoxContainer" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox/ScrollVisualRules"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="TxtJsonRules" type="TextEdit" parent="Panel/VBox/TabMargin/TabContainer/JsonTab/JsonVBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_font_sizes/font_size = 11
+placeholder_text = "在此处粘贴规则 JSON 文本..."
+
+[node name="FileDialogImport" type="FileDialog" parent="Panel"]
+unique_name_in_owner = true
+title = "选择细则分解规则 JSON 文件"
+size = Vector2i(450, 300)
+ok_button_text = "打开"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.json ; JSON 规则文件")
+
+[node name="FileDialogExport" type="FileDialog" parent="Panel"]
+unique_name_in_owner = true
+title = "导出细则分解规则为 JSON 文件"
+size = Vector2i(450, 300)
+ok_button_text = "保存"
+file_mode = 4
+access = 2
+filters = PackedStringArray("*.json ; JSON 规则文件")
 
 [node name="FooterBar" type="MarginContainer" parent="Panel/VBox"]
 layout_mode = 2

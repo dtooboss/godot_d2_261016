@@ -61,12 +61,12 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 11
 text = "分解设置(P)"
 
-[node name="BtnEnhance" type="Button" parent="Margin/VBox/Grid"]
+[node name="BtnWorkbench" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "装备强化(E)"
+text = "镶嵌打孔"
 
 [node name="BtnShop" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
@@ -87,14 +87,14 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "合成"
+text = "合成魔盒"
 
 [node name="BtnSmelt" type="Button" parent="Margin/VBox/Grid"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(68, 28)
 layout_mode = 2
 theme_override_font_sizes/font_size = 11
-text = "熔炼"
+text = "一键分解"
 
 [node name="BottomHBox" type="HBoxContainer" parent="Margin/VBox"]
 layout_mode = 2

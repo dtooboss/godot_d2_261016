@@ -151,13 +151,15 @@ func _ready() -> void:
 		if inventory_panel.socketing_workbench_panel:
 			inventory_panel.socketing_workbench_panel.visibility_changed.connect(func():
 				if inventory_panel.socketing_workbench_panel.visible:
-					# 单窗口互斥: 打开工坊时，关闭纸娃娃、魔盒与随身商店
+					# 单窗口互斥: 打开工坊/镶嵌打孔时，关闭纸娃娃、魔盒、技能与随身商店
 					if char_info_panel and char_info_panel.visible:
 						char_info_panel.close()
 					if cube_panel and cube_panel.visible:
 						cube_panel.visible = false
 					if gshop_panel and gshop_panel.visible:
 						gshop_panel.close()
+					if skill_panel and skill_panel.visible:
+						skill_panel.close()
 			)
 		
 	if world_map:
@@ -178,11 +180,20 @@ func _ready() -> void:
 		control_matrix.btn_character_clicked.connect(toggle_character_info)
 		control_matrix.btn_hook_clicked.connect(toggle_hook_setting)
 		control_matrix.btn_pickup_clicked.connect(toggle_pickup_setting)
+		control_matrix.btn_workbench_clicked.connect(toggle_workbench)
 		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
 		control_matrix.btn_shop_clicked.connect(toggle_gshop_panel)
 		control_matrix.btn_skills_clicked.connect(toggle_skill_panel)
 		control_matrix.btn_craft_clicked.connect(toggle_cube_panel)
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_title)
+
+		# 挂机战斗区：合成魔盒与镶嵌打孔置灰禁用，引导玩家返回营地安全区操作
+		if control_matrix.btn_workbench:
+			control_matrix.btn_workbench.disabled = true
+			control_matrix.btn_workbench.tooltip_text = "战斗区域无法进行镶嵌打孔，请返回营地安全区操作"
+		if control_matrix.btn_craft:
+			control_matrix.btn_craft.disabled = true
+			control_matrix.btn_craft.tooltip_text = "战斗区域无法使用合成魔盒，请返回营地安全区操作"
 
 	if hook_setting_panel:
 		hook_setting_panel.settings_saved.connect(func(_cfg):
@@ -280,6 +291,16 @@ func _ready() -> void:
 				_on_return_town_pressed(true)
 		)
 	
+	# 客户端细则分解提示挂接
+	if has_node("/root/CustomSalvageManager"):
+		var csm = get_node("/root/CustomSalvageManager")
+		if csm and csm.has_signal("salvage_triggered"):
+			csm.salvage_triggered.connect(func(cnt: int, names: Array[String]):
+				var sample = "、".join(names.slice(0, 3)) + (" 等" if names.size() > 3 else "")
+				var tip = "[color=#ffb74d]♻️ 【细则分解】[/color] 自动分解了 %d 件未保留装备：%s" % [cnt, sample]
+				GameState.add_chat_message(tip, "细则分解")
+			)
+
 	# 向 LPC 请求初始核心全量数据帧
 	_request_lpc_sync()
 	
@@ -566,6 +587,12 @@ func _update_battlefield_background(bg_path: String, stage_id: int = 0) -> void:
 			sub_idx = stage_id
 		target_res = "res://mods/vanilla/assets/worlds/%d/%d.webp" % [act, sub_idx]
 	
+	# 兼容处理：因客户端已瘦身为 .webp，若传入为 .png 且不存在时自动重定向为 .webp
+	if not ResourceLoader.exists(target_res) and target_res.ends_with(".png"):
+		var webp_res = target_res.replace(".png", ".webp")
+		if ResourceLoader.exists(webp_res):
+			target_res = webp_res
+
 	if not target_res.is_empty() and ResourceLoader.exists(target_res):
 		background_rect.texture = load(target_res)
 		print("[AFK_MainHUD] 战场实景贴图已切换: ", target_res)
@@ -800,6 +827,10 @@ func _on_network_json(type: String, data: Variant) -> void:
 	elif type == "gbag_patch" and data is Dictionary:
 		if inventory_panel and inventory_panel.has_method("apply_gbag_patch"):
 			inventory_panel.apply_gbag_patch(data)
+		if has_node("/root/CustomSalvageManager"):
+			var csm = get_node("/root/CustomSalvageManager")
+			if csm and csm.has_method("notify_loot_dropped"):
+				csm.notify_loot_dropped()
 
 	# 3. 经典状态帧 (status: 仅更新玩家自身状态)
 	elif type == "status" and data is Dictionary:
@@ -1463,7 +1494,8 @@ func _handle_combat_data(data: Dictionary) -> void:
 
 	var is_attacker_me = _is_me(atk_id, atk_name)
 	var is_victim_me = _is_me(vic_id, vic_name)
-	var is_proc = bool(data.get("is_proc", false)) or (_safe_int(data.get("is_proc"), 0) == 1) or (skill_code == "thunder_storm")
+	var is_minion = bool(data.get("is_minion", false)) or (_safe_int(data.get("is_minion"), 0) == 1)
+	var is_proc = bool(data.get("is_proc", false)) or (_safe_int(data.get("is_proc"), 0) == 1) or (skill_code == "thunder_storm") or is_minion
 
 	if is_attacker_me:
 		# 玩家主动出手攻击：记录输出伤害，攻速条真实归零推进与周期同步
@@ -1473,10 +1505,8 @@ func _handle_combat_data(data: Dictionary) -> void:
 		p_max_hp = _safe_int(data.get("me_max_hp"), -1)
 		p_mp = _safe_int(data.get("me_mp"), -1)
 		p_max_mp = _safe_int(data.get("me_max_mp"), -1)
-		if player_bottom_bar and not is_proc:
+		if player_bottom_bar and not is_proc and not is_minion:
 			player_bottom_bar.trigger_attack(interval)
-			if not skill_name.is_empty():
-				player_bottom_bar.set_main_skill(skill_name, skill_code)
 			# 主动技能施法起手：触发法力球翻涌与脉冲激荡
 			var seq_num := _safe_int(data.get("seq"), 1)
 			if seq_num <= 1 and skill_code != "attack" and not skill_name.is_empty() and skill_name != "普通攻击":
@@ -1592,19 +1622,28 @@ func _launch_combat_fx(
 	var target_pos = player_pos
 	var is_friendly_attacker: bool = is_attacker_me
 
+	var is_minion_fx = bool(data.get("is_minion", false)) or (_safe_int(data.get("is_minion"), 0) == 1)
 	if is_attacker_me:
-		start_pos = player_pos
-		# 连锁蔓延: 起弧锚定上一跳受害者 (而非玩家)，形成 怪→怪 蔓延视觉
-		if not chain_from.is_empty():
-			var from_node = _find_monster_node(chain_from, "")
-			if from_node and is_instance_valid(from_node):
-				start_pos = from_node.global_position
-			elif _killed_monster_positions.has(chain_from):
-				start_pos = _killed_monster_positions[chain_from]
-		if hit_node and is_instance_valid(hit_node):
-			target_pos = hit_node.global_position
+		if is_minion_fx:
+			# 随从军团攻击：攻击直接在目标怪物周围就近挥砍/打击，绝不锚定玩家本体，杜绝玩家冒光假象
+			if hit_node and is_instance_valid(hit_node):
+				target_pos = hit_node.global_position
+			else:
+				target_pos = _killed_monster_positions.get(vic_id, get_viewport_rect().size * Vector2(0.5, 0.45))
+			start_pos = target_pos + Vector2(randf_range(-20.0, 20.0), randf_range(15.0, 25.0))
 		else:
-			target_pos = _killed_monster_positions.get(vic_id, get_viewport_rect().size * Vector2(0.5, 0.45))
+			start_pos = player_pos
+			# 连锁蔓延: 起弧锚定上一跳受害者 (而非玩家)，形成 怪→怪 蔓延视觉
+			if not chain_from.is_empty():
+				var from_node = _find_monster_node(chain_from, "")
+				if from_node and is_instance_valid(from_node):
+					start_pos = from_node.global_position
+				elif _killed_monster_positions.has(chain_from):
+					start_pos = _killed_monster_positions[chain_from]
+			if hit_node and is_instance_valid(hit_node):
+				target_pos = hit_node.global_position
+			else:
+				target_pos = _killed_monster_positions.get(vic_id, get_viewport_rect().size * Vector2(0.5, 0.45))
 	else:
 		# 优先判定攻击者是否为组队队友 (从左上角队友卡片发射)
 		var teammate_card_pos = Vector2.ZERO
@@ -1814,6 +1853,15 @@ func _handle_reward_pop(data: Dictionary) -> void:
 		# (1) 纯增量落入背包槽位
 		if inventory_panel and inventory_panel.has_method("add_incremental_reward"):
 			inventory_panel.add_incremental_reward(it, gold)
+
+		# (1.1) 触发客户端细则分解防抖检查与即刻拦截
+		if has_node("/root/CustomSalvageManager"):
+			var csm = get_node("/root/CustomSalvageManager")
+			if csm:
+				if csm.has_method("handle_loot_dropped"):
+					csm.handle_loot_dropped(it)
+				elif csm.has_method("notify_loot_dropped"):
+					csm.notify_loot_dropped()
 
 		# (2) 战利品横幅弹出完全交由服务端权威裁决 (如暗金或未来高阶符文)
 		var allow_banner = bool(it.get("show_banner", false)) or bool(data.get("show_banner", false))
@@ -2229,29 +2277,10 @@ func toggle_skill_panel() -> void:
 		else:
 			skill_panel.open()
 
-# 魔盒开合: 单窗口互斥 (关纸娃娃/工坊/小口袋/随身商店), 打开时拉取服务端实时状态帧, 位置贴右侧栏
+# 魔盒开合: 挂机战斗区禁止使用，友好飘字引导回营
 func toggle_cube_panel() -> void:
-	if cube_panel == null:
-		return
-	if cube_panel.visible:
-		cube_panel.visible = false
-		item_tooltip.hide_tooltip()
-	else:
-		# 单窗口互斥
-		if char_info_panel and char_info_panel.visible:
-			char_info_panel.close()
-		if gshop_panel and gshop_panel.visible:
-			gshop_panel.close()
-		if inventory_panel:
-			if inventory_panel.socketing_workbench_panel:
-				inventory_panel.socketing_workbench_panel.close()
-			if inventory_panel.little_pocket_panel:
-				inventory_panel.little_pocket_panel.hide()
-		item_tooltip.hide_tooltip()
-		cube_panel.visible = true
-		NetworkClient.send_raw("gcube")
-		await get_tree().process_frame
-		_position_cube_panel()
+	show_toast("战斗区域无法使用合成魔盒，请返回营地安全区操作")
+	return
 
 func _position_cube_panel() -> void:
 	if cube_panel == null or not cube_panel.visible:
@@ -2261,6 +2290,11 @@ func _position_cube_panel() -> void:
 	var x := size.x - right_margin - cube_panel.size.x
 	var y := (size.y - cube_panel.size.y) * 0.5
 	cube_panel.position = Vector2(max(10.0, x), max(10.0, y))
+
+# 镶嵌打孔(工坊)开合: 挂机战斗区禁止使用，友好飘字引导回营
+func toggle_workbench() -> void:
+	show_toast("战斗区域无法进行镶嵌打孔，请返回营地安全区操作")
+	return
 
 # 随身补给商店开合: 单窗口互斥 (关纸娃娃/技能/魔盒/工坊/小口袋), 打开时拉取服务端实时状态帧, 位置贴右侧栏
 func toggle_gshop_panel() -> void:
@@ -2489,9 +2523,15 @@ func _update_summons_display(summons: Variant) -> void:
 		var s_name = str(s.get("name", "仆从"))
 		var stype = str(s.get("type", ""))
 		var hp_pct = _safe_int(s.get("hp_pct"), 100)
-		var icon_sym = "💀"
-		if "golem" in stype: icon_sym = "🗿"
-		elif "wolf" in stype or "grizzly" in stype: icon_sym = "🐺"
+		var icon_sym = str(s.get("icon", ""))
+		if icon_sym.is_empty():
+			if "valkyrie" in stype: icon_sym = "🛡️"
+			elif "golem" in stype: icon_sym = "🗿"
+			elif "grizzly" in stype: icon_sym = "🐻"
+			elif "spirit_wolf" in stype: icon_sym = "❄️"
+			elif "wolf" in stype: icon_sym = "🐺"
+			elif "mage" in stype: icon_sym = "🧙"
+			else: icon_sym = "💀"
 
 		var card = PanelContainer.new()
 		# 强制卡片宽度与玩家卡片(175px)严格等长

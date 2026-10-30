@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/test_visual_rules_panel.gd" id="1_test"]
+
+[node name="TestVisualRulesPanel" type="Node"]
+script = ExtResource("1_test")

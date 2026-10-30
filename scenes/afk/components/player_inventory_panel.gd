@@ -15,7 +15,7 @@ signal command_sent(cmd: String)
 @onready var btn_help: Button = %BtnHelp
 @onready var btn_pocket: Button = %BtnPocket
 @onready var btn_multi_select: Button = %BtnMultiSelect
-@onready var btn_workbench: Button = %BtnWorkbench
+var btn_workbench: Button = null
 @onready var socketing_workbench_panel: AFK_SocketingWorkbenchPanel = %SocketingWorkbenchPanel
 
 var is_multiselect_mode: bool = false
@@ -87,25 +87,16 @@ func _ready() -> void:
 		)
 		little_pocket_panel.pocket_action_requested.connect(_on_pocket_action)
 
-	if btn_workbench and socketing_workbench_panel:
-		btn_workbench.pressed.connect(func():
-			var will_open = not socketing_workbench_panel.visible
-			if will_open:
-				# 打开工坊时，自动互斥关闭小口袋
-				if little_pocket_panel and little_pocket_panel.visible:
-					little_pocket_panel.close()
-				# 单窗口互斥: 关魔盒 (兼顾安全区与挂机区)
-				var hud_w = get_parent()
-				while hud_w:
-					if "cube_panel" in hud_w and hud_w.cube_panel:
-						hud_w.cube_panel.visible = false
-						break
-					hud_w = hud_w.get_parent()
-				socketing_workbench_panel.set_current_page(current_page)
-				socketing_workbench_panel.open()
-			else:
-				socketing_workbench_panel.close()
-		)
+	btn_workbench = get_node_or_null("%BtnWorkbench")
+	if btn_workbench:
+		btn_workbench.pressed.connect(toggle_workbench)
+	else:
+		btn_workbench = Button.new()
+		btn_workbench.name = "BtnWorkbench"
+		btn_workbench.text = "镶嵌打孔"
+		btn_workbench.pressed.connect(toggle_workbench)
+
+	if socketing_workbench_panel:
 		socketing_workbench_panel.item_hovered.connect(func(data, pos):
 			item_hovered.emit(data, pos)
 		)
@@ -115,6 +106,26 @@ func _ready() -> void:
 		socketing_workbench_panel.action_requested.connect(func(cmd_str: String):
 			_send_lpc_cmd(cmd_str)
 		)
+
+func toggle_workbench() -> void:
+	if not socketing_workbench_panel:
+		return
+	var will_open = not socketing_workbench_panel.visible
+	if will_open:
+		# 打开工坊/镶嵌打孔时，自动互斥关闭小口袋
+		if little_pocket_panel and little_pocket_panel.visible:
+			little_pocket_panel.close()
+		# 单窗口互斥: 关魔盒 (兼顾安全区与挂机区)
+		var hud_w = get_parent()
+		while hud_w:
+			if "cube_panel" in hud_w and hud_w.cube_panel:
+				hud_w.cube_panel.visible = false
+				break
+			hud_w = hud_w.get_parent()
+		socketing_workbench_panel.set_current_page(current_page)
+		socketing_workbench_panel.open()
+	else:
+		socketing_workbench_panel.close()
 
 func _update_page_buttons() -> void:
 	if not inv_button_container:
@@ -633,9 +644,18 @@ func _get_host_controller() -> Node:
 
 func _notify_inventory_full() -> void:
 	print("[PlayerInventoryPanel] 背包已满！请及时整理背包或花费金币解锁新页码。")
+	_show_toast("背包已满！请及时整理背包或点击 [+] 扩充新页。")
+
+func _show_toast(msg: String) -> void:
 	var host = _get_host_controller()
-	if host and host.has_method("show_toast"):
-		host.show_toast("背包已满！请及时整理背包或点击 [+] 扩充新页。")
+	if host:
+		if host.has_method("show_toast"):
+			host.show_toast(msg)
+			return
+		elif host.has_method("_show_toast"):
+			host._show_toast(msg)
+			return
+	print("[PlayerInventoryPanel] Toast: ", msg)
 
 ## 战利品入包高光微动效 (强化爆装正反馈)
 func _play_slot_pickup_fx(slot_idx: int) -> void:
@@ -821,7 +841,7 @@ func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -
 					return
 
 				# 0.5 如果物品是未辨识装备/护身符 -> 绝对优先执行右键辨识 (优先消耗辨识卷轴，缺卷轴自动扣 2,000 金币)
-				var is_unid = bool(it.get("unidentified", false)) or AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1
+				var is_unid = bool(it.get("unidentified", false)) or AnsiHelper.to_safe_int(it.get("unidentified"), 0) == 1 or AnsiHelper.to_safe_int(it.get("d2_unidentified"), 0) == 1
 				if is_unid:
 					_send_lpc_cmd("gidentify %s" % fid)
 					return
@@ -833,8 +853,11 @@ func _on_slot_gui_input(event: InputEvent, slot_idx: int, _btn: Button = null) -
 					_send_lpc_cmd("stash store %s %d" % [fid, s_tab])
 					return
 
-				# 1. 如果工坊面板正打开 -> 优先处理工坊操作 (直接由 LPC 指令全权判断处理，前端只负责发指令与纯渲染)
+				# 1. 如果工坊面板正打开 -> 优先处理工坊操作
 				if socketing_workbench_panel and socketing_workbench_panel.is_visible_in_tree():
+					if is_unid:
+						_show_toast("未辨识的装备无法放入凹槽工坊，请先鉴定！")
+						return
 					_send_lpc_cmd("gsocket put %s %d" % [fid, current_page])
 					return
 

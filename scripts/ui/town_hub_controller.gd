@@ -251,11 +251,20 @@ func _connect_signals() -> void:
 		control_matrix.btn_character_clicked.connect(_toggle_character_info)
 		control_matrix.btn_skills_clicked.connect(_toggle_skill_panel)
 		control_matrix.btn_craft_clicked.connect(_toggle_cube_panel)
+		control_matrix.btn_workbench_clicked.connect(_toggle_workbench)
 		control_matrix.btn_pickup_clicked.connect(_toggle_pickup_setting)
 		control_matrix.btn_smelt_clicked.connect(func(): NetworkClient.send_raw("gfenjie all"))
 		control_matrix.btn_shop_clicked.connect(_toggle_gshop_panel)
 		control_matrix.btn_hook_clicked.connect(_toggle_hook_setting)
 		control_matrix.btn_exit_clicked.connect(_on_exit_to_login)
+
+		# 营地安全区：显式确保合成魔盒与镶嵌打孔按钮处于可用状态
+		if control_matrix.btn_workbench:
+			control_matrix.btn_workbench.disabled = false
+			control_matrix.btn_workbench.tooltip_text = ""
+		if control_matrix.btn_craft:
+			control_matrix.btn_craft.disabled = false
+			control_matrix.btn_craft.tooltip_text = ""
 	
 	# 初始化大地图选点出征
 	if world_map:
@@ -642,6 +651,13 @@ func _position_cube_panel() -> void:
 	var x := size.x - right_margin - cube_panel.size.x
 	var y := (size.y - cube_panel.size.y) * 0.5
 	cube_panel.position = Vector2(max(10.0, x), max(10.0, y))
+
+## 开关镶嵌打孔/工坊面板
+func _toggle_workbench() -> void:
+	if not is_sidebar_expanded:
+		set_sidebar_expanded(true)
+	if inventory_panel:
+		inventory_panel.toggle_workbench()
 
 ## 开关随身补给商店
 func _toggle_gshop_panel() -> void:

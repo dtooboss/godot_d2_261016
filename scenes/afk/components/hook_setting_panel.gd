@@ -54,9 +54,12 @@ const AUTO_SKILL_DEFS: Dictionary = {
 	"battle_command": { "name": "战斗指挥", "class": "bar", "group": "", "icon": "res://assets/skills/bar/29_battle_command.png", "desc": "全队所有技能等级提升 1 级" },
 	"battle_orders": { "name": "战斗号令", "class": "bar", "group": "", "icon": "res://assets/skills/bar/23_battle_orders.png", "desc": "极大提升最大生命值与法力值" },
 	"shout": { "name": "大吼", "class": "bar", "group": "", "icon": "res://assets/skills/bar/12_shout.png", "desc": "巨幅提升自身与小队的防御力" },
-	"battle_cry": { "name": "战斗狂嗥", "class": "bar", "group": "", "icon": "res://assets/skills/bar/20_battle_cry.png", "desc": "战术弱化：大幅降低敌怪防御与伤害" },
 	# 死灵法师 (nec)
 	"bone_armor": { "name": "白骨装甲", "class": "nec", "group": "", "icon": "res://assets/skills/nec/02_bone_armor.png", "desc": "白骨环绕周身吸收物理伤害" },
+	"clay_golem": { "name": "黏土傀儡", "class": "nec", "group": "nec_golem", "icon": "res://assets/skills/nec/09_clay_golem.png", "desc": "召唤控场重坦，攻击减速迟缓，超高生命挡刀" },
+	"bloodgolem": { "name": "鲜血傀儡", "class": "nec", "group": "nec_golem", "icon": "res://assets/skills/nec/19_bloodgolem.png", "desc": "召唤吸血肉盾，攻击按比例转化主人生命，挂机续航" },
+	"irongolem": { "name": "钢铁傀儡", "class": "nec", "group": "nec_golem", "icon": "res://assets/skills/nec/24_irongolem.png", "desc": "召唤反伤战神，近战荆棘反弹，高防御护身" },
+	"firegolem": { "name": "火焰傀儡", "class": "nec", "group": "nec_golem", "icon": "res://assets/skills/nec/28_firegolem.png", "desc": "召唤烈焰重坦，烈火灼烧光环，阵亡烈焰自爆" },
 	# 刺客 (asn)
 	"quickness": { "name": "速度爆发", "class": "asn", "group": "asn_buff", "icon": "res://assets/skills/asn/07_quickness.png", "desc": "大幅提升攻击速度与移动速度" },
 	"fade": { "name": "能量消解", "class": "asn", "group": "asn_buff", "icon": "res://assets/skills/asn/16_fade.png", "desc": "大幅提升全元素抗性与物理抗性" },

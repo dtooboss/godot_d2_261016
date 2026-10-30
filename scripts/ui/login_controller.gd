@@ -43,7 +43,7 @@ func _ready() -> void:
 	# 0. 刷新客户端版本号显示 (绿色 V0.1)
 	if footer_info:
 		var ver_str = GameState.CLIENT_VERSION if (GameState and "CLIENT_VERSION" in GameState) else "0.1"
-		footer_info.text = "[right]《劳模必须死》CLIENT [color=#44ff44]V%s[/color] · 第一幕 游侠营地[/right]" % ver_str
+		footer_info.text = "[right]《劳模必须死》CLIENT [color=#44ff44]V%s[/color] · 第一幕 罗格营地[/right]" % ver_str
 
 	# 1. 优先载入外部配置与解析启动命令行参数 (解耦写死IP与通信密钥)
 	_load_external_configs()

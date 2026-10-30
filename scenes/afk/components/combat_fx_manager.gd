@@ -182,6 +182,9 @@ func _spawn_projectile(
 	var base_scale = Vector2(0.28, 0.28)
 	var is_rotating = false
 	var use_trail = true
+	var trail_width = 6.0 if not is_crit else 8.5
+	var tail_span = 0.32
+	var fade_time = 0.06
 	
 	match fx_type:
 		"hammer":
@@ -191,7 +194,11 @@ func _spawn_projectile(
 			color = Color(1.15, 0.95, 0.50, 1.0) # 圣光专属白金色
 		"arrow":
 			tex = FX_ARROW_TEX
-			base_scale = Vector2(0.34, 0.34)
+			# 箭矢贴图原尺寸 256x112，缩减长度(X=0.18，约46px)与粗细(Y=0.08，约9px)，呈现真实纤细锐利箭身
+			base_scale = Vector2(0.18, 0.08)
+			trail_width = 1.6 if not is_crit else 2.2
+			tail_span = 0.08
+			fade_time = 0.015
 		"spike":
 			tex = FX_SPIKE_TEX
 			base_scale = Vector2(0.35, 0.35)
@@ -203,7 +210,10 @@ func _spawn_projectile(
 			base_scale = Vector2(0.38, 0.22)
 	
 	if is_crit:
-		base_scale *= 1.3
+		if fx_type == "arrow":
+			base_scale *= 1.15
+		else:
+			base_scale *= 1.3
 		
 	# 主光核精灵 (Additive 发光)
 	var sp = Sprite2D.new()
@@ -217,8 +227,13 @@ func _spawn_projectile(
 	var core_sp = Sprite2D.new()
 	core_sp.texture = tex
 	core_sp.material = _additive_material
-	core_sp.modulate = Color(1.0, 1.0, 1.0, 0.85)
-	core_sp.scale = base_scale * 0.65
+	if fx_type == "arrow":
+		# 箭矢仅头部微亮，避免整身通体过曝
+		core_sp.modulate = Color(1.0, 1.0, 1.0, 0.5)
+		core_sp.scale = base_scale * Vector2(0.65, 0.5)
+	else:
+		core_sp.modulate = Color(1.0, 1.0, 1.0, 0.85)
+		core_sp.scale = base_scale * 0.65
 	proj.add_child(core_sp)
 	
 	# 流光彗尾 Line2D (动态沿轨迹拉伸出由粗变细、由亮变透的流光带)
@@ -226,13 +241,18 @@ func _spawn_projectile(
 	if use_trail:
 		trail = Line2D.new()
 		trail.material = _additive_material
-		trail.width = 6.0 if not is_crit else 8.5
+		trail.width = trail_width
 		trail.begin_cap_mode = Line2D.LINE_CAP_ROUND
 		trail.end_cap_mode = Line2D.LINE_CAP_ROUND
 		
 		var grad = Gradient.new()
-		grad.set_color(0, Color(color.r * 0.8, color.g * 0.8, color.b * 0.8, 0.0))
-		grad.set_color(1, Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 0.9))
+		if fx_type == "arrow":
+			# 箭矢微风微光尾迹：透明度更轻柔，不产生浓厚光柱
+			grad.set_color(0, Color(color.r * 0.6, color.g * 0.6, color.b * 0.6, 0.0))
+			grad.set_color(1, Color(color.r * 1.1, color.g * 1.1, color.b * 1.1, 0.65))
+		else:
+			grad.set_color(0, Color(color.r * 0.8, color.g * 0.8, color.b * 0.8, 0.0))
+			grad.set_color(1, Color(color.r * 1.3, color.g * 1.3, color.b * 1.3, 0.9))
 		trail.gradient = grad
 		add_child(trail)
 
@@ -248,11 +268,11 @@ func _spawn_projectile(
 		tw.set_ease(Tween.EASE_OUT)
 		
 		tw.tween_method(
-			_update_projectile_straight.bind(proj, sp, trail, start_pos, target_pos, is_rotating, base_scale),
+			_update_projectile_straight.bind(proj, sp, trail, start_pos, target_pos, is_rotating, base_scale, tail_span),
 			0.0, 1.0, dur
 		)
 		tw.tween_callback(
-			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail)
+			_on_projectile_arrived.bind(target_pos, color, is_crit, on_hit, proj, trail, "", fade_time)
 		)
 	else:
 		# 怪物弹道：带自然的贝塞尔微抛物线弧度，切线自适应转向
@@ -282,7 +302,8 @@ func _update_projectile_straight(
 	start_pos: Vector2,
 	target_pos: Vector2,
 	is_rotating: bool,
-	base_scale: Vector2
+	base_scale: Vector2,
+	tail_span: float = 0.32
 ) -> void:
 	if not is_instance_valid(proj): return
 	var cur_pos = start_pos.lerp(target_pos, t)
@@ -296,7 +317,7 @@ func _update_projectile_straight(
 		
 	if trail and is_instance_valid(trail):
 		trail.clear_points()
-		var tail_t = max(0.0, t - 0.32)
+		var tail_t = max(0.0, t - tail_span)
 		for k in range(5):
 			var sub_t = lerp(tail_t, t, float(k) / 4.0)
 			trail.add_point(start_pos.lerp(target_pos, sub_t))
@@ -338,7 +359,8 @@ func _on_projectile_arrived(
 	on_hit: Callable,
 	proj: Node2D,
 	trail: Line2D,
-	elem: String = ""
+	elem: String = "",
+	fade_time: float = 0.06
 ) -> void:
 	_spawn_hit_impact(target_pos, color, is_crit, elem)
 	if on_hit.is_valid():
@@ -347,10 +369,10 @@ func _on_projectile_arrived(
 	if is_instance_valid(proj):
 		proj.queue_free()
 		
-	# 尾迹残留 0.06s 迅速淡出
+	# 尾迹残留迅速淡出
 	if trail and is_instance_valid(trail):
 		var tw = create_tween().bind_node(trail)
-		tw.tween_property(trail, "modulate:a", 0.0, 0.06)
+		tw.tween_property(trail, "modulate:a", 0.0, fade_time)
 		tw.tween_callback(trail.queue_free)
 
 ## 2. 即时纯正高亮银白电弧/连环闪电折线 (双层渲染：银白主芯 + 青紫电晕)
@@ -769,8 +791,10 @@ func _detect_fx_type(skill_code: String, elem: String) -> String:
 	if "spear" in sk or "spike" in sk or "javelin" in sk:
 		return "spike"
 		
-	# 7. 经典近战或普通挥击判定
-	if sk in ["attack", "frenzy", "zeal", "bash", "stun", "concentrate", "smite", "berserk", "venom"]:
+	# 7. 经典近战或普通挥击判定 (包括随从近战斩击/重砸/撕咬/突刺)
+	if sk in ["attack", "frenzy", "zeal", "bash", "stun", "concentrate", "smite", "berserk", "venom",
+		"skeleton_slash", "golem_slam", "bloodgolem_strike", "irongolem_slam", "firegolem_punch",
+		"grizzly_maul", "fenris_bite", "spirit_wolf_bite", "valkyrie_strike", "irongolem_thorns"]:
 		return "melee"
 		
 	# 8. 法球/火球/冰弹/其它

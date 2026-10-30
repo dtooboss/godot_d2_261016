@@ -37,7 +37,7 @@ anchor_right = 0.5
 offset_left = -300.0
 offset_top = 45.0
 offset_right = 300.0
-offset_bottom = 145.0
+offset_bottom = 185.0
 grow_horizontal = 2
 theme_override_constants/separation = 4
 
@@ -56,6 +56,13 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.55, 0.45, 0.3, 1)
 theme_override_font_sizes/font_size = 14
 text = "WORKERS MUST DIE · DATA-DRIVEN AFK RPG"
+horizontal_alignment = 1
+
+[node name="QQGroup" type="Label" parent="TitleBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.78, 0.68, 0.45, 1)
+theme_override_font_sizes/font_size = 14
+text = "QQ群：1098575765"
 horizontal_alignment = 1
 
 [node name="Panel" type="PanelContainer" parent="."]
@@ -217,7 +224,7 @@ grow_vertical = 0
 theme_override_colors/default_color = Color(0.4, 0.4, 0.4, 1)
 theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
-text = "[right]《劳模必须死》CLIENT [color=#44ff44]V0.1[/color] · 第一幕 游侠营地[/right]"
+text = "[right]《劳模必须死》CLIENT [color=#44ff44]V0.1[/color] · 第一幕 罗格营地[/right]"
 fit_content = true
 scroll_active = false
 autowrap_mode = 0

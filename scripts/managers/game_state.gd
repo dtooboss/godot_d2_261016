@@ -22,6 +22,15 @@ var _system_font_inst: SystemFont = null
 var _builtin_font_inst: Font = null
 
 func _ready() -> void:
+	# 强制去除 (DEBUG) 后缀，锁定正版发布标题
+	DisplayServer.window_set_title("劳模必须死：挂机刷宝版")
+	
+	# 动态设置运行时窗口图标与任务栏图标
+	if ResourceLoader.exists("res://icon.png"):
+		var icon_tex = load("res://icon.png")
+		if icon_tex and icon_tex is Texture2D:
+			DisplayServer.set_icon(icon_tex.get_image())
+
 	_load_and_apply_font_preference()
 
 func _load_and_apply_font_preference() -> void:
